@@ -11,7 +11,7 @@ const signUp = () => {
   return (
     <SafeAreaView className="flex-1 items-center justify-center bg-background">
       <Text> SignUp </Text>
-      <Link href="/(auth)/sign-up" className="mt-4 rounded bg-primary px-4 py-2 text-white">
+      <Link href="/(tabs)" className="mt-4 rounded bg-primary px-4 py-2 text-white">
         <Text>Create Account</Text>
       </Link>
     </SafeAreaView>

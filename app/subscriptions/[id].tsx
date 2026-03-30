@@ -11,7 +11,7 @@ const SubscriptionDetails = () => {
   return (
     <SafeAreaView className="flex-1 items-center justify-center bg-background">
       <Text>Subscription Details: {id}</Text>
-      <Link href="/">Go Back</Link>
+      <Link href="/">Go Home</Link>
     </SafeAreaView>
   )
 }

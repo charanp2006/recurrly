@@ -31,8 +31,7 @@ export default function App() {
         <Text>Go to Sign Up</Text>
       </Link>
       <Link
-      // this is not working, need to check with expo team about it
-        href={`/subscriptions/[id]?id=youtube`}
+        href={`/subscriptions/youtube`}
         className="mt-4 rounded bg-primary px-4 py-2 text-white"
       >
         <Text>Youtube Subscription</Text>
@@ -41,7 +40,7 @@ export default function App() {
         href={{ pathname: "/subscriptions/[id]", params: { id: "claude" } }}
         className="mt-4 rounded bg-primary px-4 py-2 text-white"
       >
-        <Text>CLaude Max Subscription</Text>
+        <Text>Claude Max Subscription</Text>
       </Link>
     </SafeAreaView>
   );
