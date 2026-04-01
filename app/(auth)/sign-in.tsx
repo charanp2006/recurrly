@@ -1,6 +1,6 @@
 import "@/global.css";
 import { clsx } from "clsx";
-import { useSignIn } from "@clerk/expo";
+import { useClerk, useSignIn } from "@clerk/expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { type Href, Link, useRouter } from "expo-router";
 import React from "react";
@@ -29,6 +29,7 @@ type SignInFieldErrors = {
 
 const SignInScreen = () => {
   const { signIn, errors, fetchStatus } = useSignIn();
+  const { setActive } = useClerk();
   const router = useRouter();
 
   const [emailAddress, setEmailAddress] = React.useState("");
@@ -45,19 +46,12 @@ const SignInScreen = () => {
   const passwordError = clientErrors.password ?? errors.fields.password?.message;
   const codeError = clientErrors.code ?? errors.fields.code?.message;
 
-  const finalizeAndNavigate = async () => {
-    if (!signIn) {
-      return;
-    }
-
-    await signIn.finalize({
-      navigate: ({ session, decorateUrl }) => {
-        if (session?.currentTask) {
-          router.replace("/(tabs)");
-          return;
-        }
-
+  const navigateToHome = async (sessionId: string) => {
+    await setActive({
+      session: sessionId,
+      navigate: ({ decorateUrl }) => {
         const url = decorateUrl("/(tabs)");
+
         if (Platform.OS === "web" && typeof window !== "undefined" && url.startsWith("http")) {
           window.location.href = url;
           return;
@@ -105,8 +99,8 @@ const SignInScreen = () => {
       return;
     }
 
-    if (signIn.status === "complete") {
-      await finalizeAndNavigate();
+    if (signIn.createdSessionId) {
+      await navigateToHome(signIn.createdSessionId);
       return;
     }
 
@@ -139,8 +133,8 @@ const SignInScreen = () => {
       return;
     }
 
-    if (signIn.status === "complete") {
-      await finalizeAndNavigate();
+    if (signIn.createdSessionId) {
+      await navigateToHome(signIn.createdSessionId);
     }
   };
 
