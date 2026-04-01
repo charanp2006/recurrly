@@ -1,6 +1,5 @@
 import "@/global.css";
-import { Image, Text, View } from "react-native";
-import { Link } from "expo-router";
+import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
 import images from "@/constants/images";
@@ -13,14 +12,26 @@ import UpcommingSubscriptionCard from "@/components/UpcommingSubscriptionCard";
 import { FlatList } from "react-native";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import { useState } from "react";
+import CreateSubscriptionModal from "@/components/CreateSubscriptionModal";
 
 const SafeAreaView = styled(RNSafeAreaView);
 
 export default function App() {
+  const [subscriptions, setSubscriptions] = useState(HOME_SUBSCRIPTIONS);
   const [expandedSubscriptionId, setExpandedSubscriptionId] = useState<string | null>(null);
+  const [isCreateSubscriptionModalVisible, setIsCreateSubscriptionModalVisible] = useState(false);
+
+  const handleCreateSubscription = (subscription: Subscription) => {
+    setSubscriptions((currentSubscriptions) => [subscription, ...currentSubscriptions]);
+  };
 
   return (
     <SafeAreaView className="flex-1 p-5 bg-background">
+      <CreateSubscriptionModal
+        visible={isCreateSubscriptionModalVisible}
+        onClose={() => setIsCreateSubscriptionModalVisible(false)}
+        onCreate={handleCreateSubscription}
+      />
 
         <FlatList
           ListHeaderComponent={() => (
@@ -31,7 +42,15 @@ export default function App() {
                   <Text className="home-user-name">{HOME_USER.name}</Text>
                 </View>
 
-                <Image source={icons.add} className="home-add-icon" />
+                <Pressable
+                  onPress={() => setIsCreateSubscriptionModalVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add subscription"
+                  hitSlop={10}
+                  className="size-12 items-center justify-center"
+                >
+                  <Image source={icons.add} className="home-add-icon" />
+                </Pressable>
               </View>
 
               <View className="home-balance-card">
@@ -63,7 +82,7 @@ export default function App() {
               <ListHeading title="All Subscriptions" />
             </>
           )}
-          data={HOME_SUBSCRIPTIONS}
+          data={subscriptions}
           renderItem={({ item }) => (
             <SubscriptionCard 
               {...item} 
