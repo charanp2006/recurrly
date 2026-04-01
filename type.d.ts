@@ -1,6 +1,18 @@
 import type { ImageSourcePropType } from "react-native";
 
 declare global {
+    type SubscriptionFrequency = "Monthly" | "Yearly";
+
+    type SubscriptionCategory =
+        | "Entertainment"
+        | "AI Tools"
+        | "Developer Tools"
+        | "Design"
+        | "Productivity"
+        | "Cloud"
+        | "Music"
+        | "Other";
+
     interface AppTab {
         name: string;
         title: string;
@@ -18,6 +30,7 @@ declare global {
         name: string;
         plan?: string;
         category?: string;
+        frequency?: SubscriptionFrequency;
         paymentMethod?: string;
         status?: string;
         startDate?: string;
