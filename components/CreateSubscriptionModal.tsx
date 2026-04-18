@@ -12,17 +12,22 @@ import {
     TextInput,
     View,
 } from "react-native";
-import { icons } from "@/constants/icons";
 import {
     SUBSCRIPTION_CATEGORIES,
-    SUBSCRIPTION_CATEGORY_COLORS,
     SUBSCRIPTION_FREQUENCIES,
 } from "@/constants/data";
 
 type CreateSubscriptionModalProps = {
     visible: boolean;
     onClose: () => void;
-    onCreate: (subscription: Subscription) => void;
+    onCreate: (payload: {
+        name: string;
+        price: number;
+        frequency: SubscriptionFrequency;
+        category: SubscriptionCategory;
+        paymentMethod: string;
+        startDate: string;
+    }) => Promise<void> | void;
 };
 
 const DEFAULT_FREQUENCY = SUBSCRIPTION_FREQUENCIES[0];
@@ -33,59 +38,79 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
     const [price, setPrice] = React.useState("");
     const [frequency, setFrequency] = React.useState<SubscriptionFrequency>(DEFAULT_FREQUENCY);
     const [category, setCategory] = React.useState<SubscriptionCategory>(DEFAULT_CATEGORY);
+    const [paymentMethod, setPaymentMethod] = React.useState("");
     const [nameError, setNameError] = React.useState("");
     const [priceError, setPriceError] = React.useState("");
+    const [paymentMethodError, setPaymentMethodError] = React.useState("");
+    const [submitError, setSubmitError] = React.useState("");
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
 
     const normalizedName = name.trim();
     const parsedPrice = Number(price.replace(/,/g, "."));
     const isNameValid = normalizedName.length > 0;
     const isPriceValid = Number.isFinite(parsedPrice) && parsedPrice > 0;
-    const canSubmit = isNameValid && isPriceValid;
+    const normalizedPaymentMethod = paymentMethod.trim();
+    const isPaymentMethodValid = normalizedPaymentMethod.length >= 2;
+    const canSubmit = isNameValid && isPriceValid && isPaymentMethodValid && !isSubmitting;
 
     const resetForm = () => {
         setName("");
         setPrice("");
         setFrequency(DEFAULT_FREQUENCY);
         setCategory(DEFAULT_CATEGORY);
+        setPaymentMethod("");
         setNameError("");
         setPriceError("");
+        setPaymentMethodError("");
+        setSubmitError("");
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
+        if (isSubmitting) {
+            return;
+        }
+
         const nextNameError = isNameValid ? "" : "Name is required.";
         const nextPriceError = !price.trim()
             ? "Price is required."
             : !Number.isFinite(parsedPrice) || parsedPrice <= 0
               ? "Enter a price greater than 0."
               : "";
+        const nextPaymentMethodError = isPaymentMethodValid
+            ? ""
+            : "Payment method must be at least 2 characters.";
 
         setNameError(nextNameError);
         setPriceError(nextPriceError);
+        setPaymentMethodError(nextPaymentMethodError);
+        setSubmitError("");
 
-        if (nextNameError || nextPriceError) {
+        if (nextNameError || nextPriceError || nextPaymentMethodError) {
             return;
         }
 
         const startDate = dayjs();
-        const renewalDate = startDate.add(1, frequency === "Monthly" ? "month" : "year");
 
-        onCreate({
-            id: `subscription-${startDate.valueOf()}`,
-            name: normalizedName,
-            price: parsedPrice,
-            frequency,
-            category,
-            status: "active",
-            startDate: startDate.toISOString(),
-            renewalDate: renewalDate.toISOString(),
-            icon: icons.wallet,
-            billing: frequency,
-            color: SUBSCRIPTION_CATEGORY_COLORS[category],
-            currency: "INR",
-        });
+        try {
+            setIsSubmitting(true);
 
-        resetForm();
-        onClose();
+            await onCreate({
+                name: normalizedName,
+                price: parsedPrice,
+                frequency,
+                category,
+                paymentMethod: normalizedPaymentMethod,
+                startDate: startDate.toISOString(),
+            });
+
+            resetForm();
+            onClose();
+        } catch (error: any) {
+            const message = error?.message || "Failed to create subscription.";
+            setSubmitError(message);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -213,9 +238,36 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
                                     </View>
                                 </View>
 
+                                <View className="auth-field">
+                                    <Text className="auth-label">Payment method</Text>
+                                    <TextInput
+                                        value={paymentMethod}
+                                        onChangeText={(text) => {
+                                            setPaymentMethod(text);
+                                            if (paymentMethodError) {
+                                                setPaymentMethodError("");
+                                            }
+                                            if (submitError) {
+                                                setSubmitError("");
+                                            }
+                                        }}
+                                        placeholder="UPI, card ending 1234, wallet, etc."
+                                        placeholderTextColor="rgba(0, 0, 0, 0.45)"
+                                        autoCapitalize="words"
+                                        className={clsx("auth-input", paymentMethodError && "auth-input-error")}
+                                    />
+                                    {paymentMethodError ? <Text className="auth-error">{paymentMethodError}</Text> : null}
+                                </View>
+
+                                {submitError ? <Text className="auth-error">{submitError}</Text> : null}
+
                                 <Pressable
-                                    onPress={handleSubmit}
+                                    onPress={canSubmit ? handleSubmit : undefined}
+                                    disabled={!canSubmit}
                                     className={clsx("auth-button", !canSubmit && "auth-button-disabled")}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Create subscription"
+                                    accessibilityState={{ disabled: !canSubmit }}
                                 >
                                     <Text className="auth-button-text">Create subscription</Text>
                                 </Pressable>

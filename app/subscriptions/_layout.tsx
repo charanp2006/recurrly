@@ -1,10 +1,10 @@
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "@/context/AuthContext";
 import { Redirect, Stack } from "expo-router";
 
 export default function SubscriptionLayout() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoading, isSignedIn } = useAuth();
 
-  if (!isLoaded) {
+  if (isLoading) {
     return null;
   }
 
