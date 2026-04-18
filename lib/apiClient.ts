@@ -85,14 +85,29 @@ export const resolveApiBaseUrl = () => {
     const configured = process.env.EXPO_PUBLIC_API_URL;
     if (configured) {
       const normalized = sanitizeBaseUrl(configured);
-      const resolved =
-        isAndroidEmulator() && isLocalhostHost(normalized)
-          ? `http://10.0.2.2:${DEFAULT_API_PORT}/api/v1`
-          : normalized;
 
-      console.log("[API BASE URL]", resolved);
+      // If running on Android emulator with localhost URL, replace only the hostname
+      if (isAndroidEmulator() && isLocalhostHost(normalized)) {
+        try {
+          const url = new URL(normalized);
+          url.hostname = "10.0.2.2";
+          const resolved = url.toString().replace(/\/$/, ''); // Remove trailing slash if present
+          console.log("[API BASE URL]", resolved);
+          console.log("[API DEVICE]", getDeviceTypeLabel());
+          return resolved;
+        } catch (urlError) {
+          // Fallback if URL parsing fails
+          console.warn('[API] Failed to parse URL, using hardcoded replacement', urlError);
+          const resolved = `http://10.0.2.2:${DEFAULT_API_PORT}/api/v1`;
+          console.log("[API BASE URL]", resolved);
+          console.log("[API DEVICE]", getDeviceTypeLabel());
+          return resolved;
+        }
+      }
+
+      console.log("[API BASE URL]", normalized);
       console.log("[API DEVICE]", getDeviceTypeLabel());
-      return resolved;
+      return normalized;
     }
 
     const expoHost = getHostFromExpo();
@@ -129,34 +144,79 @@ const sanitizeHeaders = (headers: Record<string, any> | undefined) => {
   }
 
   const next = { ...headers };
-  if (next.Authorization) {
-    next.Authorization = "Bearer [REDACTED]";
+  const sensitiveHeaders = ['Authorization', 'Cookie', 'Set-Cookie', 'cookie', 'set-cookie'];
+
+  for (const key of sensitiveHeaders) {
+    if (next[key]) {
+      next[key] = "[REDACTED]";
+    }
   }
+
   return next;
 };
 
+const redactedBody = (data: any) => {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  const sensitiveKeys = [
+    'token', 'access_token', 'refresh_token', 'accessToken', 'refreshToken',
+    'otp', 'password', 'ssn', 'email', 'phone', 'profile_image', 'profileImage',
+    'base64'
+  ];
+
+  const redacted: any = Array.isArray(data) ? [] : {};
+
+  for (const key in data) {
+    if (sensitiveKeys.includes(key.toLowerCase())) {
+      const value = data[key];
+      if (typeof value === 'string') {
+        if (value.length > 100 || /^data:image/.test(value)) {
+          redacted[key] = `[REDACTED_BLOB_${value.length}_bytes]`;
+        } else {
+          redacted[key] = '[REDACTED]';
+        }
+      } else {
+        redacted[key] = '[REDACTED]';
+      }
+    } else if (typeof data[key] === 'object' && data[key] !== null) {
+      redacted[key] = redactedBody(data[key]);
+    } else {
+      redacted[key] = data[key];
+    }
+  }
+
+  return redacted;
+};
+
 const logRequest = (config: InternalAxiosRequestConfig) => {
+  const isDevelopment = process.env.NODE_ENV === "development";
+
   console.log("[API REQUEST]", {
     method: config.method?.toUpperCase(),
     url: joinUrl(config.baseURL, config.url),
     timeout: config.timeout,
     headers: sanitizeHeaders(config.headers as Record<string, any> | undefined),
-    data: config.data,
+    data: isDevelopment ? config.data : redactedBody(config.data),
   });
 };
 
 const logResponse = (status: number, config: InternalAxiosRequestConfig, data: any) => {
+  const isDevelopment = process.env.NODE_ENV === "development";
+
   console.log("[API RESPONSE]", {
     method: config.method?.toUpperCase(),
     url: joinUrl(config.baseURL, config.url),
     status,
-    data,
+    data: isDevelopment ? data : redactedBody(data),
   });
 };
 
 const logError = (error: AxiosError) => {
   const fullUrl = joinUrl(error.config?.baseURL, error.config?.url);
   const isNetworkError = !!error.request && !error.response;
+  const isDevelopment = process.env.NODE_ENV === "development";
 
   if (isNetworkError) {
     console.error("[API ERROR] Device cannot reach server", {
@@ -175,7 +235,7 @@ const logError = (error: AxiosError) => {
     message: error.message,
     code: error.code,
     status: error.response?.status,
-    response: error.response?.data,
+    response: isDevelopment ? error.response?.data : redactedBody(error.response?.data),
   });
 };
 

@@ -93,7 +93,7 @@ const SignUpScreen = () => {
       setResendTimer(60);
       setErrors({});
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || "Failed to send OTP";
+      const errorMessage = error?.message || error.response?.data?.message || "Failed to send OTP";
       console.error("[SignUp] Error:", errorMessage);
       setErrors({ ...errors, email: errorMessage });
       toast.show(errorMessage, { type: "error" });
@@ -119,7 +119,7 @@ const SignUpScreen = () => {
         router.replace("/(tabs)");
       }, 500);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || "Failed to verify OTP";
+      const errorMessage = error?.message || error.response?.data?.message || "Failed to verify OTP";
       console.error("[SignUp] Error:", errorMessage);
       setErrors({ ...errors, otp: errorMessage });
       toast.show(errorMessage, { type: "error" });

@@ -25,23 +25,26 @@ const Insights = () => {
   const subscriptions = useSubscriptionsStore((state) => state.subscriptions);
 
   const totals = React.useMemo(() => {
-    const monthlyCost = subscriptions.reduce((sum, sub) => {
+    const activeSubscriptions = subscriptions.filter((sub) => sub.status === "active");
+
+    const monthlyCost = activeSubscriptions.reduce((sum, sub) => {
       if (sub.billing === "Yearly") {
         return sum + sub.price / 12;
       }
       return sum + sub.price;
     }, 0);
 
-    const activeCount = subscriptions.filter((sub) => sub.status === "active").length;
+    const activeCount = activeSubscriptions.length;
 
-    const byCategory = subscriptions.reduce<Record<string, number>>((acc, sub) => {
+    const byCategory = activeSubscriptions.reduce<Record<string, number>>((acc, sub) => {
       const key = sub.category || "Other";
-      acc[key] = (acc[key] || 0) + sub.price;
+      const monthlyAmount = sub.billing === "Yearly" ? sub.price / 12 : sub.price;
+      acc[key] = (acc[key] || 0) + monthlyAmount;
       return acc;
     }, {});
 
-    const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
     const highestValue = Math.max(...Object.values(byCategory), 1);
+    const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
 
     const chartData = Object.entries(byCategory)
       .map(([name, amount]) => ({

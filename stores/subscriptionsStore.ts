@@ -178,7 +178,7 @@ export const useSubscriptionsStore = create<SubscriptionsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
       console.log('[Subscriptions] Fetching subscriptions from API');
-      
+
       const response = await apiClient.get('/subscriptions/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -190,7 +190,7 @@ export const useSubscriptionsStore = create<SubscriptionsStore>((set, get) => ({
     } catch (error) {
       const errorMessage = toApiErrorMessage(error);
       console.error('[Subscriptions] Error fetching:', errorMessage);
-      set({ error: errorMessage, isLoading: false, hasLoaded: true });
+      set({ error: errorMessage, isLoading: false });
     }
   },
 
@@ -206,12 +206,21 @@ export const useSubscriptionsStore = create<SubscriptionsStore>((set, get) => ({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const createdSub = normalizeApiSubscription(response.data.data?.subscription);
-      
+      // Validate response shape before normalizing
+      const subscriptionData = response.data.data?.subscription || response.data.subscription;
+
+      if (!subscriptionData || typeof subscriptionData !== 'object') {
+        console.error('[Subscriptions] Invalid response shape:', response.data);
+        set({ error: 'Invalid response from server', isLoading: false });
+        throw new Error('Invalid response from server');
+      }
+
+      const createdSub = normalizeApiSubscription(subscriptionData);
+
       // Immediately add to store
       get().addSubscription(createdSub);
       set({ isLoading: false });
-      
+
       console.log('[Subscriptions] Subscription created successfully');
       return createdSub;
     } catch (error) {

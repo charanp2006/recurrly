@@ -22,6 +22,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { apiClient, checkApiHealth, getBaseURL, toApiErrorMessage } from '@/lib/apiClient';
+import { useSubscriptionsStore } from '@/stores/subscriptionsStore';
 
 const STORAGE_KEYS = {
   TOKEN: 'auth_token',
@@ -90,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const sendOTP = useCallback(async (email: string, name?: string) => {
     try {
-      console.log(`[Auth] Sending OTP to: ${email}`);
+      console.log('[Auth] Sending OTP');
 
       try {
         await checkApiHealth();
@@ -118,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const verifyOTP = useCallback(async (email: string, otp: string) => {
     try {
-      console.log(`[Auth] Verifying OTP for: ${email}`);
+      console.log('[Auth] Verifying OTP');
       const response = await apiClient.post('/auth/verify-otp', {
         email,
         otp,
@@ -147,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const resendOTP = useCallback(async (email: string) => {
     try {
-      console.log(`[Auth] Resending OTP to: ${email}`);
+      console.log('[Auth] Resending OTP');
       const response = await apiClient.post('/auth/resend-otp', { email });
       console.log('[Auth] OTP resent successfully');
       return response.data;
@@ -169,19 +170,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      // Clean up secure storage
-      await SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN);
-      await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
-
-      setToken(null);
-      setUser(null);
       console.log('[Auth] User signed out successfully');
     } catch (error) {
       console.error('[Auth] Error signing out:', toApiErrorMessage(error));
-      // Still clear local state even if API call fails
+    } finally {
+      // Always clear local state and storage regardless of API call outcome
+      await SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN);
+      await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
       setToken(null);
       setUser(null);
+
+      // Reset subscriptions store to avoid leaking data between users
+      useSubscriptionsStore.getState().reset();
     }
   }, [token]);
 

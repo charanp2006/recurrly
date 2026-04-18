@@ -46,9 +46,13 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
     const [isSubmitting, setIsSubmitting] = React.useState(false);
 
     const normalizedName = name.trim();
-    const parsedPrice = Number(price.replace(/,/g, "."));
+
+    // Validate price format: only allow digits with optional single decimal separator (. or ,) and up to 2 decimal places
+    const priceFormatValid = /^\d+([.,]\d{1,2})?$/.test(price.trim());
+    const parsedPrice = priceFormatValid ? Number(price.replace(/,/g, ".")) : NaN;
+
     const isNameValid = normalizedName.length > 0;
-    const isPriceValid = Number.isFinite(parsedPrice) && parsedPrice > 0;
+    const isPriceValid = priceFormatValid && Number.isFinite(parsedPrice) && parsedPrice > 0;
     const normalizedPaymentMethod = paymentMethod.trim();
     const isPaymentMethodValid = normalizedPaymentMethod.length >= 2;
     const canSubmit = isNameValid && isPriceValid && isPaymentMethodValid && !isSubmitting;
@@ -73,9 +77,11 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
         const nextNameError = isNameValid ? "" : "Name is required.";
         const nextPriceError = !price.trim()
             ? "Price is required."
-            : !Number.isFinite(parsedPrice) || parsedPrice <= 0
-              ? "Enter a price greater than 0."
-              : "";
+            : !priceFormatValid
+              ? "Invalid price format. Use digits with optional decimal (e.g., 9.99)."
+              : !Number.isFinite(parsedPrice) || parsedPrice <= 0
+                ? "Enter a price greater than 0."
+                : "";
         const nextPaymentMethodError = isPaymentMethodValid
             ? ""
             : "Payment method must be at least 2 characters.";
