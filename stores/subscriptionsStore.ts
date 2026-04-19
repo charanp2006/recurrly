@@ -49,7 +49,22 @@ const mapFrequencyToApi = (frequency: SubscriptionFrequency) =>
   frequency === 'Yearly' ? 'yearly' : 'monthly';
 
 const mapFrequencyToUi = (frequency: ApiSubscription['frequency']): SubscriptionFrequency =>
-  frequency === 'yearly' ? 'Yearly' : 'Monthly';
+  (() => {
+    if (frequency === 'yearly') {
+      return 'Yearly';
+    }
+
+    if (frequency === 'monthly') {
+      return 'Monthly';
+    }
+
+    if (frequency === 'daily' || frequency === 'weekly') {
+      console.warn(`[Subscriptions] Unsupported frequency "${frequency}" from API. Falling back to Monthly.`);
+      return 'Monthly';
+    }
+
+    return 'Monthly';
+  })();
 
 const CATEGORY_KEY_TO_UI: Record<string, SubscriptionCategory> = {
   entertainment: 'Entertainment',

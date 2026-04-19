@@ -7,13 +7,14 @@ import { icons } from "@/constants/icons";
 import { formatCurrency } from "@/lib/utils";
 import dayjs from "dayjs";
 import ListHeading from "@/components/ListHeading";
-import UpcommingSubscriptionCard from "@/components/UpcommingSubscriptionCard";
+import UpcomingSubscriptionCard from "@/components/UpcomingSubscriptionCard";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import { useEffect, useState } from "react";
 import CreateSubscriptionModal from "@/components/CreateSubscriptionModal";
 import { useSubscriptionsStore } from "@/stores/subscriptionsStore";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "react-native-toast-notifications";
+import type { SubscriptionCategory, SubscriptionFrequency } from "@/type";
 
 const SafeAreaView = styled(RNSafeAreaView);
 
@@ -75,12 +76,24 @@ export default function App() {
       throw new Error("You are not signed in.");
     }
 
-    await createSubscription(payload, token);
-    toast.show("Subscription created", {
-      type: "success",
-      placement: "top",
-      duration: 2500,
-    });
+    try {
+      await createSubscription(payload, token);
+      toast.show("Subscription created", {
+        type: "success",
+        placement: "top",
+        duration: 2500,
+      });
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || error?.response?.data?.message || "Failed to create subscription";
+
+      toast.show(errorMessage, {
+        type: "danger",
+        placement: "top",
+        duration: 3000,
+      });
+      throw error;
+    }
   };
 
   return (
@@ -129,7 +142,7 @@ export default function App() {
                 <ListHeading title="Upcoming Renewals" />
                 <FlatList
                   data={upcomingSubscriptions}
-                  renderItem={({ item }) => <UpcommingSubscriptionCard {...item} />}
+                  renderItem={({ item }) => <UpcomingSubscriptionCard {...item} />}
                   keyExtractor={(item) => item.id} 
                   horizontal
                   showsHorizontalScrollIndicator={false}

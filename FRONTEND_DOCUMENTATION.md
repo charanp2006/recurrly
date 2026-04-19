@@ -62,12 +62,14 @@ sequenceDiagram
     participant Mail as NodeMailer
 
     User->>App: Enter email and request OTP
-    App->>API: POST /auth/send-otp
+  App->>API: POST /api/v1/auth/send-otp
     API->>Mail: Send OTP email
     API-->>App: OTP sent response
     App-->>User: Navigate to OTP screen + toast
     User->>App: Enter OTP
-    App->>API: POST /auth/verify-otp
+  App->>API: POST /api/v1/auth/verify-otp
+  User->>App: Request resend when timer ends
+  App->>API: POST /api/v1/auth/resend-otp
     API-->>App: JWT + user profile
     App-->>User: Redirect to main tabs
 ```
@@ -137,7 +139,7 @@ Implementation summary:
 
 - Expo + React Native + TypeScript
 - Expo Router for file-based navigation
-- Clerk (`@clerk/expo`) for auth and session handling
+- Custom OTP authentication via `AuthProvider` (`context/AuthContext.tsx`) and backend auth endpoints
 - NativeWind + Tailwind CSS v4 for styling
 - PostHog (`posthog-react-native`) for analytics provider wiring
 - Day.js and Intl for date and currency formatting
@@ -148,7 +150,7 @@ Implementation summary:
 flowchart TD
     Root["app/_layout.tsx"] --> Fonts["expo-font"]
     Root --> Splash["expo-splash-screen"]
-    Root --> Clerk["ClerkProvider"]
+  Root --> Auth["AuthProvider (OTP)"]
     Root --> PostHog["PostHogProvider"]
     Root --> Router["Expo Router"]
     Router --> Index["app/index.tsx"]
@@ -163,11 +165,12 @@ The root layout in `app/_layout.tsx` does these steps:
 
 1. Calls `SplashScreen.preventAutoHideAsync()`.
 2. Loads custom Plus Jakarta Sans fonts.
-3. Validates `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`.
+3. Validates PostHog config (`EXPO_PUBLIC_POSTHOG_API_KEY`, `EXPO_PUBLIC_POSTHOG_HOST`).
 4. Wraps the app in providers:
    - `PostHogProvider`
-   - `ClerkProvider` with secure `tokenCache`
+  - `AuthProvider` for OTP/JWT session state
    - `SafeAreaProvider`
+  - `ToastProvider`
 5. Renders an Expo Router stack with hidden headers.
 
 ## Routing And Access Control
@@ -185,10 +188,10 @@ The root layout in `app/_layout.tsx` does these steps:
 sequenceDiagram
     participant User
     participant App
-    participant Clerk
+  participant AuthProvider
 
     User->>App: Launch app
-    App->>Clerk: useAuth() session check
+  App->>AuthProvider: useAuth() / isSignedIn check
     alt Signed in
         App-->>User: Redirect to /(tabs)
     else Signed out
@@ -198,38 +201,36 @@ sequenceDiagram
 
 ### Group-Level Guards
 
-- `app/(auth)/_layout.tsx`: signed-in users are redirected to tabs.
-- `app/(tabs)/_layout.tsx`: signed-out users are redirected to sign-in.
-- `app/subscriptions/_layout.tsx`: same signed-in requirement for detail routes.
+- `app/(auth)/_layout.tsx`: uses `useAuth()` and redirects signed-in users to tabs.
+- `app/(tabs)/_layout.tsx`: uses `useAuth()` and redirects signed-out users to sign-in.
+- `app/subscriptions/_layout.tsx`: uses `useAuth()` with the same signed-in requirement for detail routes.
 
 ## Screen Documentation
 
 ### 1) `app/index.tsx`
 
-- Uses `useAuth()` from Clerk.
-- Waits for `isLoaded` and then redirects:
+- Uses `useAuth()` from custom `AuthProvider`.
+- Waits for `isLoading` and then redirects:
   - Signed in -> `/(tabs)`
   - Signed out -> `/(auth)/sign-in`
 
 ### 2) `app/(auth)/sign-in.tsx`
 
-- Uses Clerk `useSignIn()` and `useClerk()`.
-- Supports:
-  - email + password sign in
-  - optional email code verification if client trust step is required
-- Includes:
-  - client-side email/password validation
-  - password visibility toggle
-  - web-aware navigation handling (`window.location.href`)
+- Uses `useAuth()` methods from `AuthProvider`: `sendOTP`, `verifyOTP`, and `resendOTP`.
+- Supports OTP sign-in flow:
+  - submit email -> send OTP
+  - submit OTP code -> verify and receive session
+  - resend OTP with cooldown timer for client trust/retry step
+- Includes email and OTP validation with toast feedback.
 
 ### 3) `app/(auth)/sign-up.tsx`
 
-- Uses Clerk `useSignUp()`.
-- Supports:
-  - email/password account creation
-  - email verification code step
-  - finalize and route to tabs on completion
-- Includes password strength and confirm-password validation.
+- Uses `useAuth()` methods from `AuthProvider`: `sendOTP` (with name) and `verifyOTP`.
+- Supports sign-up flow:
+  - submit name + email -> send OTP
+  - verify OTP -> account is activated and session starts
+  - route to tabs after successful verification
+- Includes field-level validation (required fields, valid email, OTP format). Password/confirm-password validation is not part of the current OTP-first UX.
 
 ### 4) `app/(tabs)/index.tsx` (Home)
 
@@ -256,22 +257,16 @@ sequenceDiagram
 
 ### 6) `app/(tabs)/settings.tsx`
 
-- Uses Clerk `useUser()` + `useClerk()`.
-- Displays profile/account metadata:
-  - full name
-  - email
-  - phone
-  - created date
-  - last sign-in date
-- Handles sign out and redirects to sign-in.
+- Uses `useAuth()` from `AuthProvider` for user context access.
+- Displays profile/account metadata (name, email, profile image).
+- Handles `signOut()` through `AuthProvider` and redirects to sign-in on success.
 
 ### 7) Placeholder Screens
 
 - `app/onboarding.tsx`
-- `app/(tabs)/insights.tsx`
 - `app/subscriptions/[id].tsx`
 
-These currently render placeholder UI and are planned for future implementation.
+These currently render placeholder UI and are planned for future implementation. `app/(tabs)/insights.tsx` now renders live monthly insights from subscription state.
 
 ## Component Library
 
@@ -290,7 +285,7 @@ These currently render placeholder UI and are planned for future implementation.
 - Expanded state: payment method, category, start date, renewal date, status.
 - Color theming for compact state via category color.
 
-### `components/UpcommingSubscriptionCard.tsx`
+### `components/UpcomingSubscriptionCard.tsx`
 
 - Compact card for upcoming renewals in the horizontal list.
 
@@ -337,15 +332,15 @@ Styling is token-first and class-based:
 
 Required public variables:
 
-- `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_API_URL` (base URL for OTP auth/profile/upload API calls)
 - `EXPO_PUBLIC_POSTHOG_API_KEY`
 - `EXPO_PUBLIC_POSTHOG_HOST`
 
 ## Current Limitations
 
 1. Subscription create flow is local-only and not persisted to API.
-2. Insights, onboarding, and detail screens are placeholders.
-3. Mobile client is not yet wired to backend endpoints.
+2. Onboarding and subscription detail screens are still placeholders.
+3. Mobile integration is partial: OTP auth (`/api/v1/auth/send-otp`, `/api/v1/auth/verify-otp`, `/api/v1/auth/resend-otp`) and profile/image upload APIs are wired, while full subscription persistence and all screen-level backend wiring are still pending.
 
 ## Planned Integration Path
 

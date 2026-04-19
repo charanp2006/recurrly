@@ -127,8 +127,10 @@ const Settings = () => {
       const uploadedUrl = response?.data?.imageUrl;
       if (uploadedUrl) {
         setProfileImage(uploadedUrl);
+        toast.show("Profile image updated", { type: "success" });
+      } else {
+        toast.show("Failed to update profile image", { type: "danger" });
       }
-      toast.show("Profile image updated", { type: "success" });
     } catch (error: any) {
       console.error("[Profile] Image upload failed:", error);
       toast.show(error?.response?.data?.message || "Failed to upload image", { type: "danger" });
@@ -146,6 +148,10 @@ const Settings = () => {
       setIsSigningOut(true);
       await signOut();
       router.replace("/(auth)/sign-in");
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || error?.response?.data?.message || "Failed to sign out";
+      toast.show(errorMessage, { type: "danger" });
     } finally {
       setIsSigningOut(false);
     }

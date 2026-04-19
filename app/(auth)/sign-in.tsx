@@ -23,7 +23,7 @@ import "@/global.css";
 import { clsx } from "clsx";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Link, useRouter } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -55,6 +55,7 @@ const SignInScreen = () => {
   const { sendOTP, verifyOTP, resendOTP } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Form state
   const [email, setEmail] = useState("");
@@ -65,9 +66,11 @@ const SignInScreen = () => {
   const [resendTimer, setResendTimer] = useState(0);
 
   useEffect(() => {
-    console.log("[SignIn] Component mounted");
     return () => {
-      console.log("[SignIn] Component unmounted");
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -91,14 +94,14 @@ const SignInScreen = () => {
    */
   const validateEmail = (emailStr: string): boolean => {
     if (!emailStr.trim()) {
-      setErrors({ ...errors, email: "Email is required" });
+      setErrors((prev) => ({ ...prev, email: "Email is required" }));
       return false;
     }
     if (!emailRegex.test(emailStr.trim())) {
-      setErrors({ ...errors, email: "Enter a valid email address" });
+      setErrors((prev) => ({ ...prev, email: "Enter a valid email address" }));
       return false;
     }
-    setErrors({ ...errors, email: undefined });
+    setErrors((prev) => ({ ...prev, email: undefined }));
     return true;
   };
 
@@ -107,14 +110,14 @@ const SignInScreen = () => {
    */
   const validateOTP = (otpStr: string): boolean => {
     if (!otpStr.trim()) {
-      setErrors({ ...errors, otp: "OTP is required" });
+      setErrors((prev) => ({ ...prev, otp: "OTP is required" }));
       return false;
     }
     if (!otpRegex.test(otpStr.trim())) {
-      setErrors({ ...errors, otp: "OTP must be 6 digits" });
+      setErrors((prev) => ({ ...prev, otp: "OTP must be 6 digits" }));
       return false;
     }
-    setErrors({ ...errors, otp: undefined });
+    setErrors((prev) => ({ ...prev, otp: undefined }));
     return true;
   };
 
@@ -132,7 +135,6 @@ const SignInScreen = () => {
       }
 
       setIsLoading(true);
-      console.log("[SignIn] Sending OTP to:", email);
 
       await sendOTP(email);
 
@@ -142,7 +144,6 @@ const SignInScreen = () => {
         duration: 3000,
       });
 
-      console.log("[SignIn] OTP sent successfully, moving to OTP screen");
       setStep("otp");
       setOtp("");
       setResendTimer(60); // 60 second cooldown before resend
@@ -150,7 +151,7 @@ const SignInScreen = () => {
       const errorMessage =
         error?.message || error?.response?.data?.message || "Failed to send OTP";
       console.error("[SignIn] Error sending OTP:", errorMessage);
-      setErrors({ ...errors, email: errorMessage });
+      setErrors((prev) => ({ ...prev, email: errorMessage }));
       toast.show(errorMessage, {
         type: "error",
         placement: "top",
@@ -175,7 +176,6 @@ const SignInScreen = () => {
       }
 
       setIsLoading(true);
-      console.log("[SignIn] Verifying OTP for:", email);
 
       await verifyOTP(email, otp);
 
@@ -185,9 +185,9 @@ const SignInScreen = () => {
         duration: 2000,
       });
 
-      console.log("[SignIn] OTP verified, redirecting to main app");
-      setTimeout(() => {
+      redirectTimeoutRef.current = setTimeout(() => {
         router.replace("/(tabs)");
+        redirectTimeoutRef.current = null;
       }, 500);
     } catch (error: any) {
       const errorMessage =
@@ -196,13 +196,13 @@ const SignInScreen = () => {
 
       console.error("[SignIn] Error verifying OTP:", errorMessage);
 
-      setErrors({
-        ...errors,
+      setErrors((prev) => ({
+        ...prev,
         otp:
           remainingAttempts !== undefined
             ? `${errorMessage} (${remainingAttempts} attempts left)`
             : errorMessage,
-      });
+      }));
 
       const verifyMessage =
         remainingAttempts !== undefined
@@ -228,7 +228,6 @@ const SignInScreen = () => {
         return;
       }
 
-      console.log("[SignIn] Resending OTP to:", email);
       setIsLoading(true);
 
       await resendOTP(email);
@@ -241,10 +240,10 @@ const SignInScreen = () => {
 
       setOtp("");
       setResendTimer(60);
-      setErrors({ ...errors, otp: undefined });
+      setErrors((prev) => ({ ...prev, otp: undefined }));
     } catch (error: any) {
       const errorMessage =
-        error.message || error.response?.data?.message || "Failed to resend OTP";
+        error?.message || error?.response?.data?.message || "Failed to resend OTP";
       console.error("[SignIn] Error resending OTP:", errorMessage);
       toast.show(errorMessage, {
         type: "error",
@@ -260,10 +259,9 @@ const SignInScreen = () => {
    * Go back to email step
    */
   const handleBackToEmail = () => {
-    console.log("[SignIn] Going back to email step");
     setStep("email");
     setOtp("");
-    setErrors({ ...errors, otp: undefined });
+    setErrors((prev) => ({ ...prev, otp: undefined }));
   };
 
   const emailError = errors.email;
@@ -313,7 +311,7 @@ const SignInScreen = () => {
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
-                    if (errors.email) setErrors({ ...errors, email: undefined });
+                    if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
                   }}
                   placeholder="Enter your email"
                   placeholderTextColor="rgba(0, 0, 0, 0.45)"
@@ -353,7 +351,7 @@ const SignInScreen = () => {
                   value={otp}
                   onChangeText={(text) => {
                     setOtp(text.replace(/[^0-9]/g, "").slice(0, 6));
-                    if (errors.otp) setErrors({ ...errors, otp: undefined });
+                    if (errors.otp) setErrors((prev) => ({ ...prev, otp: undefined }));
                   }}
                   placeholder="000000"
                   placeholderTextColor="rgba(0, 0, 0, 0.45)"

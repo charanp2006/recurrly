@@ -172,7 +172,7 @@ const redactSensitiveData = (value: any): any => {
     return value;
   }
 
-  const sensitiveKeys = new Set([
+  const sensitiveKeys = [
     "token",
     "accessToken",
     "refreshToken",
@@ -182,10 +182,11 @@ const redactSensitiveData = (value: any): any => {
     "cookie",
     "cookies",
     "authorization",
-  ]);
+  ];
+  const sensitiveKeysLower = new Set(sensitiveKeys.map((key) => key.toLowerCase()));
 
   return Object.entries(value).reduce<Record<string, any>>((acc, [key, nestedValue]) => {
-    if (sensitiveKeys.has(key.toLowerCase())) {
+    if (sensitiveKeysLower.has(key.toLowerCase())) {
       acc[key] = "[REDACTED]";
       return acc;
     }

@@ -16,6 +16,17 @@
     "preview4": {
       "distribution": "internal"
     },
-    "production": {}
+    "production": {
+      "channel": "production",
+      "android": {
+        "buildType": "aab"
+      },
+      "ios": {
+        "distribution": "app-store"
+      },
+      "env": {
+        "APP_ENV": "production"
+      }
+    }
   }
 }

@@ -16,7 +16,7 @@ import "@/global.css";
 import { clsx } from "clsx";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Link, useRouter } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -46,6 +46,7 @@ const SignUpScreen = () => {
   const { sendOTP, verifyOTP } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  const otpNavigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -67,23 +68,31 @@ const SignUpScreen = () => {
     };
   }, [resendTimer]);
 
+  useEffect(() => {
+    return () => {
+      if (otpNavigateTimeoutRef.current) {
+        clearTimeout(otpNavigateTimeoutRef.current);
+        otpNavigateTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const handleCreateAccount = async () => {
     try {
       if (!name.trim()) {
-        setErrors({ ...errors, name: "Name is required" });
+        setErrors((prev) => ({ ...prev, name: "Name is required" }));
         return;
       }
       if (!email.trim()) {
-        setErrors({ ...errors, email: "Email is required" });
+        setErrors((prev) => ({ ...prev, email: "Email is required" }));
         return;
       }
       if (!emailRegex.test(email.trim())) {
-        setErrors({ ...errors, email: "Enter a valid email" });
+        setErrors((prev) => ({ ...prev, email: "Enter a valid email" }));
         return;
       }
 
       setIsLoading(true);
-      console.log("[SignUp] Sending OTP to:", email);
 
       await sendOTP(email, name);
 
@@ -96,7 +105,7 @@ const SignUpScreen = () => {
       const errorMessage =
         error?.message || error?.response?.data?.message || "Failed to send OTP";
       console.error("[SignUp] Error:", errorMessage);
-      setErrors({ ...errors, email: errorMessage });
+      setErrors((prev) => ({ ...prev, email: errorMessage }));
       toast.show(errorMessage, { type: "error" });
     } finally {
       setIsLoading(false);
@@ -106,24 +115,23 @@ const SignUpScreen = () => {
   const handleVerifyOTP = async () => {
     try {
       if (!otp.trim() || !otpRegex.test(otp)) {
-        setErrors({ ...errors, otp: "OTP must be 6 digits" });
+        setErrors((prev) => ({ ...prev, otp: "OTP must be 6 digits" }));
         return;
       }
 
       setIsLoading(true);
-      console.log("[SignUp] Verifying OTP");
-
       await verifyOTP(email, otp);
 
       toast.show("Account created successfully!", { type: "success" });
-      setTimeout(() => {
+      otpNavigateTimeoutRef.current = setTimeout(() => {
         router.replace("/(tabs)");
+        otpNavigateTimeoutRef.current = null;
       }, 500);
     } catch (error: any) {
       const errorMessage =
         error?.message || error?.response?.data?.message || "Failed to verify OTP";
       console.error("[SignUp] Error:", errorMessage);
-      setErrors({ ...errors, otp: errorMessage });
+      setErrors((prev) => ({ ...prev, otp: errorMessage }));
       toast.show(errorMessage, { type: "error" });
     } finally {
       setIsLoading(false);
@@ -172,7 +180,7 @@ const SignUpScreen = () => {
                   value={name}
                   onChangeText={(text) => {
                     setName(text);
-                    if (errors.name) setErrors({ ...errors, name: undefined });
+                    if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
                   }}
                   placeholder="Your name"
                   placeholderTextColor="rgba(0, 0, 0, 0.45)"
@@ -188,7 +196,7 @@ const SignUpScreen = () => {
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
-                    if (errors.email) setErrors({ ...errors, email: undefined });
+                    if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
                   }}
                   placeholder="your@email.com"
                   placeholderTextColor="rgba(0, 0, 0, 0.45)"
@@ -220,7 +228,7 @@ const SignUpScreen = () => {
                   value={otp}
                   onChangeText={(text) => {
                     setOtp(text.replace(/[^0-9]/g, "").slice(0, 6));
-                    if (errors.otp) setErrors({ ...errors, otp: undefined });
+                    if (errors.otp) setErrors((prev) => ({ ...prev, otp: undefined }));
                   }}
                   placeholder="000000"
                   placeholderTextColor="rgba(0, 0, 0, 0.45)"

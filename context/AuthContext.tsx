@@ -72,9 +72,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = await SecureStore.getItemAsync(STORAGE_KEYS.USER);
 
         if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
-          console.log('[Auth] Auth state restored from storage');
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            setToken(storedToken);
+            setUser(parsedUser);
+            console.log('[Auth] Auth state restored from storage');
+          } catch (parseError) {
+            console.error('[Auth] Invalid stored user JSON. Clearing auth storage.', parseError);
+            await SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN);
+            await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
+            setToken(null);
+            setUser(null);
+          }
         }
       } catch (error) {
         console.error('[Auth] Error initializing auth:', error);
@@ -125,7 +134,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         otp,
       });
 
-      const { token: newToken, user: userData } = response.data.data;
+      const responseData = response?.data?.data;
+      const newToken = responseData?.token;
+      const userData = responseData?.user;
+
+      if (
+        !responseData ||
+        typeof newToken !== 'string' ||
+        !newToken ||
+        !userData ||
+        typeof userData !== 'object'
+      ) {
+        throw new Error('Invalid verification response. Please try again.');
+      }
 
       // Store token and user in secure storage
       await SecureStore.setItemAsync(STORAGE_KEYS.TOKEN, newToken);

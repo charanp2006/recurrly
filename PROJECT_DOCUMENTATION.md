@@ -5,7 +5,7 @@
 Recurrly is a subscription management app with two parts:
 
 1. A React Native / Expo client that handles onboarding, authentication, subscription browsing, and local subscription creation.
-2. A Node.js / Express backend that supports email/password auth, subscription persistence, reminders, and request protection.
+2. A Node.js / Express backend that supports OTP auth, subscription persistence, reminders, and request protection.
 
 The current app is built with Expo Router, OTP email authentication, NativeWind for styling, and a shared state layer for home/subscriptions screens. The backend uses MongoDB, JWT auth, Arcjet protection, Nodemailer email delivery, Cloudinary image hosting, and Upstash Workflow-based reminders.
 
@@ -128,11 +128,11 @@ Implementation summary:
 
 ## Frontend Architecture
 
-The client uses file-based routing. The root layout loads fonts, prevents the splash screen from hiding too early, and wraps the app in Clerk, PostHog, and Safe Area providers.
+The client uses file-based routing. The root layout loads fonts, prevents the splash screen from hiding too early, and wraps the app in AuthProvider, PostHog, Safe Area, and toast providers.
 
 ```mermaid
 flowchart TD
-    Root["app/_layout.tsx"] --> Clerk["ClerkProvider"]
+    Root["app/_layout.tsx"] --> Auth["AuthProvider (OTP)"]
     Root --> PostHog[PostHogProvider]
     Root --> Stack["Expo Router Stack"]
     Stack --> Index["app/index.tsx"]
@@ -143,7 +143,7 @@ flowchart TD
 
 ### Routing Strategy
 
-- `app/index.tsx` checks the Clerk session and redirects to the app or sign-in flow.
+- `app/index.tsx` checks `useAuth()` (`isLoading`, `isSignedIn`) and redirects to tabs or sign-in flow.
 - `app/(auth)/_layout.tsx` keeps signed-in users out of the auth stack.
 - `app/(tabs)/_layout.tsx` keeps signed-out users out of the protected tab area.
 - `app/subscriptions/_layout.tsx` protects subscription detail routes the same way.
@@ -169,17 +169,17 @@ The subscriptions screen in `app/(tabs)/subscriptions.tsx` is a searchable view 
 
 #### Settings
 
-The settings screen in `app/(tabs)/settings.tsx` uses Clerk user data.
+The settings screen in `app/(tabs)/settings.tsx` uses `AuthContext` user data.
 
 - It shows profile details, account metadata, and sign-out support.
 - It supports both loaded and signed-out states.
 
 #### Auth
 
-The sign-in and sign-up screens are custom Clerk flows.
+The sign-in and sign-up screens are custom OTP flows backed by `AuthContext`.
 
-- They validate email and password on the client before submitting.
-- They support email verification code steps when Clerk requires them.
+- They validate name/email/OTP on the client before submitting.
+- They call OTP endpoints (`send-otp`, `verify-otp`, `resend-otp`) through the shared API client.
 - On success, they navigate into the protected tab area.
 
 #### Subscription Details
@@ -194,17 +194,21 @@ The dynamic route `app/subscriptions/[id].tsx` is currently a placeholder detail
 sequenceDiagram
     participant User
     participant App as Expo App
-    participant Clerk as Clerk Auth
+    participant Auth as AuthProvider
+    participant API as Backend API
 
     User->>App: Open app
-    App->>Clerk: Check session
+    App->>Auth: Restore token/user and check isSignedIn
     alt Signed in
         App->>App: Redirect to /(tabs)
     else Signed out
         App->>App: Redirect to /(auth)/sign-in
     end
-    User->>Clerk: Sign in or sign up
-    Clerk-->>App: Session created
+    User->>App: Enter email + request OTP
+    App->>API: POST /api/v1/auth/send-otp
+    User->>App: Enter OTP
+    App->>API: POST /api/v1/auth/verify-otp
+    API-->>App: JWT + user profile
     App->>App: Redirect to /(tabs)
 ```
 
@@ -249,7 +253,7 @@ The visual style is defined through NativeWind classes in `global.css` and theme
 Reusable components:
 
 - `components/SubscriptionCard.tsx` renders collapsed and expanded subscription cards.
-- `components/UpcommingSubscriptionCard.tsx` renders the horizontal upcoming renewal cards.
+- `components/UpcomingSubscriptionCard.tsx` renders the horizontal upcoming renewal cards.
 - `components/ListHeading.tsx` standardizes section headers.
 - `components/CreateSubscriptionModal.tsx` handles local form entry and validation.
 
@@ -307,11 +311,14 @@ flowchart LR
 
 #### Auth Controller
 
-`controllers/auth.controller.js` implements sign-up, sign-in, and a scaffolded sign-out handler.
+`controllers/auth.controller.js` is OTP-first and exposes send/verify/resend handlers plus sign-out.
 
-- Sign-up hashes the password, creates the user in a transaction, and returns a JWT.
-- Sign-in verifies credentials and returns a JWT.
-- Sign-out is currently a placeholder.
+- `sendOTP` and `resendOTP` generate/store OTP state and dispatch email via Nodemailer.
+- `verifyOTP` validates the code, marks user verified, and issues JWT.
+- `signUp` and `signIn` password endpoints are intentionally deprecated and return HTTP 410.
+- `signOut` is a lightweight success response because JWT is stateless (client clears local session data).
+
+This means password auth and OTP do not coexist as active flows in this codebase; OTP is the canonical entry point.
 
 #### Subscription Controller
 
@@ -364,9 +371,12 @@ The model also auto-calculates a renewal date if one is missing and keeps the re
 
 ### Auth Routes
 
-- `POST /api/v1/auth/sign-up`
-- `POST /api/v1/auth/sign-in`
+- `POST /api/v1/auth/send-otp`
+- `POST /api/v1/auth/verify-otp`
+- `POST /api/v1/auth/resend-otp`
 - `POST /api/v1/auth/sign-out`
+
+Password `sign-up`/`sign-in` handlers exist only as deprecated controller stubs and are not mounted in `routes/auth.routes.js`.
 
 ### User Routes
 
@@ -374,6 +384,10 @@ The model also auto-calculates a renewal date if one is missing and keeps the re
 - `GET /api/v1/users/:id`
 - `PUT /api/v1/users/:id`
 - `DELETE /api/v1/users/:id`
+- `GET /api/v1/users/profile`
+- `PUT /api/v1/users/profile`
+
+`/users/profile` routes are authenticated shortcuts for operating on the current user resource.
 
 ### Subscription Routes
 
@@ -388,9 +402,17 @@ The model also auto-calculates a renewal date if one is missing and keeps the re
 
 - `POST /api/v1/workflows/subscription/reminder`
 
+### Upload Routes
+
+- `POST /api/v1/upload/profile-image`
+
+Request: JSON body with either `base64` image data or `imageUrl`.
+
+Response: success envelope containing updated user and `imageUrl` for immediate client avatar refresh.
+
 ## External Services
 
-- Clerk manages authentication sessions in the mobile client.
+- OTP authentication (NodeMailer + JWT + AuthContext) manages mobile client sessions.
 - PostHog is present as the analytics provider.
 - Arcjet protects the backend from rate abuse and unwanted automated traffic.
 - MongoDB stores users and subscriptions.
@@ -401,7 +423,7 @@ The model also auto-calculates a renewal date if one is missing and keeps the re
 
 ### Frontend
 
-- `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_API_URL` (base URL used by OTP/profile/upload API calls)
 - `EXPO_PUBLIC_POSTHOG_API_KEY`
 - `EXPO_PUBLIC_POSTHOG_HOST`
 
@@ -421,13 +443,13 @@ The model also auto-calculates a renewal date if one is missing and keeps the re
 
 ## Current Gaps And Starter Areas
 
-- `app/onboarding.tsx`, `app/(tabs)/insights.tsx`, and `app/subscriptions/[id].tsx` are still placeholder screens.
+- `app/onboarding.tsx` and `app/subscriptions/[id].tsx` are still placeholder screens.
 - The mobile create-subscription flow currently updates local state only.
-- Some backend pieces are scaffolded but not complete, including sign-out and some route/controller edge cases.
+- Some backend edge cases are still scaffolded and need hardening.
 - The `app-example/` folder is starter content and is not part of the live product flow.
 
 ## Suggested Next Steps
 
 1. Connect the mobile create-subscription form to the backend `POST /api/v1/subscriptions` endpoint.
-2. Replace placeholder screens with actual onboarding, insights, and subscription detail experiences.
+2. Replace placeholder screens with actual onboarding and subscription detail experiences.
 3. Add request/response examples and a backend API contract section once the data flow is finalized.

@@ -13,6 +13,7 @@ import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
 import { useSubscriptionsStore } from "@/stores/subscriptionsStore";
 import { useAuth } from "@/context/AuthContext";
+import type { Subscription } from "@/type";
 
 const SafeAreaView = styled(RNSafeAreaView);
 
