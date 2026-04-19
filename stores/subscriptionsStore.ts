@@ -51,20 +51,42 @@ const mapFrequencyToApi = (frequency: SubscriptionFrequency) =>
 const mapFrequencyToUi = (frequency: ApiSubscription['frequency']): SubscriptionFrequency =>
   frequency === 'yearly' ? 'Yearly' : 'Monthly';
 
+const CATEGORY_KEY_TO_UI: Record<string, SubscriptionCategory> = {
+  entertainment: 'Entertainment',
+  ai_tools: 'AI Tools',
+  developer_tools: 'Developer Tools',
+  design: 'Design',
+  productivity: 'Productivity',
+  cloud: 'Cloud',
+  music: 'Music',
+  other: 'Other',
+};
+
+const UI_TO_CATEGORY_KEY: Record<SubscriptionCategory, string> = {
+  Entertainment: 'entertainment',
+  'AI Tools': 'ai_tools',
+  'Developer Tools': 'developer_tools',
+  Design: 'design',
+  Productivity: 'productivity',
+  Cloud: 'cloud',
+  Music: 'music',
+  Other: 'other',
+};
+
+const normalizeCategoryKey = (value: string) =>
+  value.trim().toLowerCase().replace(/\s+/g, '_');
+
 const mapCategoryToApi = (category: SubscriptionCategory) => {
-  const normalized = category.trim().toLowerCase();
-  if (normalized === 'entertainment' || normalized === 'music') {
-    return 'entertainment';
-  }
-  return 'other';
+  return UI_TO_CATEGORY_KEY[category] || 'other';
 };
 
 const mapApiCategoryToUi = (category?: string): SubscriptionCategory => {
-  const normalized = (category || '').toLowerCase();
-  if (normalized === 'entertainment') {
-    return 'Entertainment';
+  if (!category) {
+    return 'Other';
   }
-  return 'Other';
+
+  const normalized = normalizeCategoryKey(category);
+  return CATEGORY_KEY_TO_UI[normalized] || 'Other';
 };
 
 const normalizeApiSubscription = (subscription: ApiSubscription): Subscription => {
@@ -190,7 +212,7 @@ export const useSubscriptionsStore = create<SubscriptionsStore>((set, get) => ({
     } catch (error) {
       const errorMessage = toApiErrorMessage(error);
       console.error('[Subscriptions] Error fetching:', errorMessage);
-      set({ error: errorMessage, isLoading: false, hasLoaded: true });
+      set({ error: errorMessage, isLoading: false });
     }
   },
 
@@ -206,7 +228,15 @@ export const useSubscriptionsStore = create<SubscriptionsStore>((set, get) => ({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const createdSub = normalizeApiSubscription(response.data.data?.subscription);
+      const createdPayload = response?.data;
+      const apiSubscription =
+        createdPayload?.data?.subscription || createdPayload?.subscription;
+
+      if (!apiSubscription || typeof apiSubscription !== 'object' || !apiSubscription._id) {
+        throw new Error('Invalid subscription payload from server. Please try again.');
+      }
+
+      const createdSub = normalizeApiSubscription(apiSubscription as ApiSubscription);
       
       // Immediately add to store
       get().addSubscription(createdSub);

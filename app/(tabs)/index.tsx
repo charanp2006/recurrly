@@ -3,7 +3,6 @@ import { FlatList, Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
 import images from "@/constants/images";
-import { HOME_BALANCE, UPCOMING_SUBSCRIPTIONS } from "@/constants/data";
 import { icons } from "@/constants/icons";
 import { formatCurrency } from "@/lib/utils";
 import dayjs from "dayjs";
@@ -20,6 +19,8 @@ const SafeAreaView = styled(RNSafeAreaView);
 
 export default function App() {
   const subscriptions = useSubscriptionsStore((state) => state.subscriptions);
+  const isLoading = useSubscriptionsStore((state) => state.isLoading);
+  const error = useSubscriptionsStore((state) => state.error);
   const hasLoaded = useSubscriptionsStore((state) => state.hasLoaded);
   const fetchSubscriptions = useSubscriptionsStore((state) => state.fetchSubscriptions);
   const createSubscription = useSubscriptionsStore((state) => state.createSubscription);
@@ -27,6 +28,30 @@ export default function App() {
   const toast = useToast();
   const [expandedSubscriptionId, setExpandedSubscriptionId] = useState<string | null>(null);
   const [isCreateSubscriptionModalVisible, setIsCreateSubscriptionModalVisible] = useState(false);
+
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "active");
+
+  const homeBalance = activeSubscriptions.reduce(
+    (sum, sub) => sum + (sub.billing === "Yearly" ? sub.price / 12 : sub.price),
+    0,
+  );
+
+  const upcomingSubscriptions = [...activeSubscriptions]
+    .filter((sub) => sub.renewalDate)
+    .sort((a, b) => dayjs(a.renewalDate).valueOf() - dayjs(b.renewalDate).valueOf())
+    .slice(0, 5)
+    .map((sub) => ({
+      id: sub.id,
+      icon: sub.icon,
+      name: sub.name,
+      price: sub.price,
+      currency: sub.currency,
+      daysLeft: Math.max(0, dayjs(sub.renewalDate).startOf("day").diff(dayjs().startOf("day"), "day")),
+    }));
+
+  const nextRenewalDate = upcomingSubscriptions[0]
+    ? activeSubscriptions.find((sub) => sub.id === upcomingSubscriptions[0].id)?.renewalDate
+    : null;
 
   useEffect(() => {
     if (!token || hasLoaded) {
@@ -91,10 +116,10 @@ export default function App() {
 
                 <View className="home-balance-row">
                   <Text className="home-balance-amount">
-                    {formatCurrency(HOME_BALANCE.amount)}
+                    {formatCurrency(homeBalance)}
                   </Text>
                   <Text className="home-balance-date">
-                    {dayjs(HOME_BALANCE.nextRenewalDate).format("MM/DD")}
+                    {nextRenewalDate ? dayjs(nextRenewalDate).format("MM/DD") : "--/--"}
                   </Text>
                 </View>
                 
@@ -103,13 +128,15 @@ export default function App() {
               <View className="mb-5">
                 <ListHeading title="Upcoming Renewals" />
                 <FlatList
-                  data={UPCOMING_SUBSCRIPTIONS}
+                  data={upcomingSubscriptions}
                   renderItem={({ item }) => <UpcommingSubscriptionCard {...item} />}
                   keyExtractor={(item) => item.id} 
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   ListEmptyComponent={<Text className="home-empty-state">No upcoming renewals yet.</Text>}
                 />
+                {isLoading ? <Text className="home-empty-state">Loading subscriptions...</Text> : null}
+                {error ? <Text className="home-empty-state">{error}</Text> : null}
               </View>
               
               <ListHeading title="All Subscriptions" />

@@ -32,6 +32,7 @@ type CreateSubscriptionModalProps = {
 
 const DEFAULT_FREQUENCY = SUBSCRIPTION_FREQUENCIES[0];
 const DEFAULT_CATEGORY = SUBSCRIPTION_CATEGORIES[0];
+const validPricePattern = /^\d+(?:[.,]\d{1,2})?$/;
 
 const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscriptionModalProps) => {
     const [name, setName] = React.useState("");
@@ -46,7 +47,18 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
     const [isSubmitting, setIsSubmitting] = React.useState(false);
 
     const normalizedName = name.trim();
-    const parsedPrice = Number(price.replace(/,/g, "."));
+    const normalizedPriceInput = price.trim();
+    const hasThousandsSeparator = /\d[.,]\d{3}(?:[.,]|$)/.test(normalizedPriceInput);
+    const hasMultipleSeparators = (normalizedPriceInput.match(/[.,]/g) || []).length > 1;
+    const isPriceFormatValid =
+        normalizedPriceInput.length > 0 &&
+        !/\s/.test(normalizedPriceInput) &&
+        !hasThousandsSeparator &&
+        !hasMultipleSeparators &&
+        validPricePattern.test(normalizedPriceInput);
+    const parsedPrice = isPriceFormatValid
+        ? Number(normalizedPriceInput.replace(",", "."))
+        : Number.NaN;
     const isNameValid = normalizedName.length > 0;
     const isPriceValid = Number.isFinite(parsedPrice) && parsedPrice > 0;
     const normalizedPaymentMethod = paymentMethod.trim();
@@ -73,7 +85,9 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
         const nextNameError = isNameValid ? "" : "Name is required.";
         const nextPriceError = !price.trim()
             ? "Price is required."
-            : !Number.isFinite(parsedPrice) || parsedPrice <= 0
+                        : !isPriceFormatValid
+                            ? "Use only digits and one optional decimal separator (max 2 decimals)."
+                            : !Number.isFinite(parsedPrice) || parsedPrice <= 0
               ? "Enter a price greater than 0."
               : "";
         const nextPaymentMethodError = isPaymentMethodValid

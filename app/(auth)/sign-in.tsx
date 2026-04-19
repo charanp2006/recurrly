@@ -148,7 +148,7 @@ const SignInScreen = () => {
       setResendTimer(60); // 60 second cooldown before resend
     } catch (error: any) {
       const errorMessage =
-        error.message || error.response?.data?.message || "Failed to send OTP";
+        error?.message || error?.response?.data?.message || "Failed to send OTP";
       console.error("[SignIn] Error sending OTP:", errorMessage);
       setErrors({ ...errors, email: errorMessage });
       toast.show(errorMessage, {
@@ -191,8 +191,8 @@ const SignInScreen = () => {
       }, 500);
     } catch (error: any) {
       const errorMessage =
-        error.message || error.response?.data?.message || "Failed to verify OTP";
-      const remainingAttempts = error.response?.data?.remainingAttempts;
+        error?.message || error?.response?.data?.message || "Failed to verify OTP";
+      const remainingAttempts = error?.response?.data?.remainingAttempts;
 
       console.error("[SignIn] Error verifying OTP:", errorMessage);
 
@@ -204,14 +204,16 @@ const SignInScreen = () => {
             : errorMessage,
       });
 
-      toast.show(
-        `Invalid OTP${remainingAttempts ? ` (${remainingAttempts} attempts left)` : ""}`,
-        {
-          type: "danger",
-          placement: "top",
-          duration: 3000,
-        }
-      );
+      const verifyMessage =
+        remainingAttempts !== undefined
+          ? `${errorMessage} (${remainingAttempts} attempts left)`
+          : errorMessage;
+
+      toast.show(verifyMessage, {
+        type: "danger",
+        placement: "top",
+        duration: 3000,
+      });
     } finally {
       setIsLoading(false);
     }

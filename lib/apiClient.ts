@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 const DEFAULT_API_PORT = 5500;
+const isDebug = process.env.NODE_ENV === "development";
 
 const trimTrailingSlash = (value: unknown) => String(value ?? "").replace(/\/+$/, "");
 
@@ -80,6 +81,19 @@ const getHostFromExpo = (): string | null => {
   }
 };
 
+const replaceAndroidEmulatorLocalhost = (urlValue: string) => {
+  try {
+    const parsedUrl = new URL(urlValue);
+    if (parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1") {
+      parsedUrl.hostname = "10.0.2.2";
+      return trimTrailingSlash(parsedUrl.toString());
+    }
+    return trimTrailingSlash(parsedUrl.toString());
+  } catch {
+    return urlValue;
+  }
+};
+
 export const resolveApiBaseUrl = () => {
   try {
     const configured = process.env.EXPO_PUBLIC_API_URL;
@@ -87,7 +101,7 @@ export const resolveApiBaseUrl = () => {
       const normalized = sanitizeBaseUrl(configured);
       const resolved =
         isAndroidEmulator() && isLocalhostHost(normalized)
-          ? `http://10.0.2.2:${DEFAULT_API_PORT}/api/v1`
+          ? replaceAndroidEmulatorLocalhost(normalized)
           : normalized;
 
       console.log("[API BASE URL]", resolved);
@@ -129,10 +143,55 @@ const sanitizeHeaders = (headers: Record<string, any> | undefined) => {
   }
 
   const next = { ...headers };
-  if (next.Authorization) {
-    next.Authorization = "Bearer [REDACTED]";
-  }
+  const lowerCaseHeaderMap: Record<string, string> = {
+    authorization: "Authorization",
+    cookie: "Cookie",
+    "set-cookie": "Set-Cookie",
+  };
+
+  Object.entries(lowerCaseHeaderMap).forEach(([rawKey, originalKey]) => {
+    if (next[rawKey] || next[originalKey]) {
+      next[rawKey] = "[REDACTED]";
+      next[originalKey] = "[REDACTED]";
+    }
+  });
+
   return next;
+};
+
+const redactSensitiveData = (value: any): any => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(redactSensitiveData);
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  const sensitiveKeys = new Set([
+    "token",
+    "accessToken",
+    "refreshToken",
+    "otp",
+    "email",
+    "password",
+    "cookie",
+    "cookies",
+    "authorization",
+  ]);
+
+  return Object.entries(value).reduce<Record<string, any>>((acc, [key, nestedValue]) => {
+    if (sensitiveKeys.has(key.toLowerCase())) {
+      acc[key] = "[REDACTED]";
+      return acc;
+    }
+    acc[key] = redactSensitiveData(nestedValue);
+    return acc;
+  }, {});
 };
 
 const logRequest = (config: InternalAxiosRequestConfig) => {
@@ -141,7 +200,7 @@ const logRequest = (config: InternalAxiosRequestConfig) => {
     url: joinUrl(config.baseURL, config.url),
     timeout: config.timeout,
     headers: sanitizeHeaders(config.headers as Record<string, any> | undefined),
-    data: config.data,
+    data: isDebug ? config.data : redactSensitiveData(config.data),
   });
 };
 
@@ -150,7 +209,7 @@ const logResponse = (status: number, config: InternalAxiosRequestConfig, data: a
     method: config.method?.toUpperCase(),
     url: joinUrl(config.baseURL, config.url),
     status,
-    data,
+    data: isDebug ? data : redactSensitiveData(data),
   });
 };
 
@@ -175,7 +234,7 @@ const logError = (error: AxiosError) => {
     message: error.message,
     code: error.code,
     status: error.response?.status,
-    response: error.response?.data,
+    response: isDebug ? error.response?.data : redactSensitiveData(error.response?.data),
   });
 };
 

@@ -25,18 +25,18 @@ const Insights = () => {
   const subscriptions = useSubscriptionsStore((state) => state.subscriptions);
 
   const totals = React.useMemo(() => {
-    const monthlyCost = subscriptions.reduce((sum, sub) => {
-      if (sub.billing === "Yearly") {
-        return sum + sub.price / 12;
-      }
-      return sum + sub.price;
-    }, 0);
+    const activeSubscriptions = subscriptions.filter((sub) => sub.status === "active");
 
-    const activeCount = subscriptions.filter((sub) => sub.status === "active").length;
+    const toMonthlyAmount = (sub: Subscription) =>
+      sub.billing === "Yearly" ? sub.price / 12 : sub.price;
 
-    const byCategory = subscriptions.reduce<Record<string, number>>((acc, sub) => {
+    const monthlyCost = activeSubscriptions.reduce((sum, sub) => sum + toMonthlyAmount(sub), 0);
+
+    const activeCount = activeSubscriptions.length;
+
+    const byCategory = activeSubscriptions.reduce<Record<string, number>>((acc, sub) => {
       const key = sub.category || "Other";
-      acc[key] = (acc[key] || 0) + sub.price;
+      acc[key] = (acc[key] || 0) + toMonthlyAmount(sub);
       return acc;
     }, {});
 
