@@ -1,28 +1,99 @@
 import "@/global.css";
-import { Image, Pressable, Text, View } from "react-native";
+import { FlatList, Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
 import images from "@/constants/images";
-import { HOME_BALANCE, HOME_SUBSCRIPTIONS, HOME_USER, UPCOMING_SUBSCRIPTIONS } from "@/constants/data";
 import { icons } from "@/constants/icons";
 import { formatCurrency } from "@/lib/utils";
 import dayjs from "dayjs";
 import ListHeading from "@/components/ListHeading";
-import UpcommingSubscriptionCard from "@/components/UpcommingSubscriptionCard";
-import { FlatList } from "react-native";
+import UpcomingSubscriptionCard from "@/components/UpcomingSubscriptionCard";
 import SubscriptionCard from "@/components/SubscriptionCard";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CreateSubscriptionModal from "@/components/CreateSubscriptionModal";
+import { useSubscriptionsStore } from "@/stores/subscriptionsStore";
+import { useAuth } from "@/context/AuthContext";
+import { useToast } from "react-native-toast-notifications";
+import type { SubscriptionCategory, SubscriptionFrequency } from "@/type";
 
 const SafeAreaView = styled(RNSafeAreaView);
 
 export default function App() {
-  const [subscriptions, setSubscriptions] = useState(HOME_SUBSCRIPTIONS);
+  const subscriptions = useSubscriptionsStore((state) => state.subscriptions);
+  const isLoading = useSubscriptionsStore((state) => state.isLoading);
+  const error = useSubscriptionsStore((state) => state.error);
+  const hasLoaded = useSubscriptionsStore((state) => state.hasLoaded);
+  const fetchSubscriptions = useSubscriptionsStore((state) => state.fetchSubscriptions);
+  const createSubscription = useSubscriptionsStore((state) => state.createSubscription);
+  const { user, token } = useAuth();
+  const toast = useToast();
   const [expandedSubscriptionId, setExpandedSubscriptionId] = useState<string | null>(null);
   const [isCreateSubscriptionModalVisible, setIsCreateSubscriptionModalVisible] = useState(false);
 
-  const handleCreateSubscription = (subscription: Subscription) => {
-    setSubscriptions((currentSubscriptions) => [subscription, ...currentSubscriptions]);
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "active");
+
+  const homeBalance = activeSubscriptions.reduce(
+    (sum, sub) => sum + (sub.billing === "Yearly" ? sub.price / 12 : sub.price),
+    0,
+  );
+
+  const upcomingSubscriptions = [...activeSubscriptions]
+    .filter((sub) => sub.renewalDate)
+    .sort((a, b) => dayjs(a.renewalDate).valueOf() - dayjs(b.renewalDate).valueOf())
+    .slice(0, 5)
+    .map((sub) => ({
+      id: sub.id,
+      icon: sub.icon,
+      name: sub.name,
+      price: sub.price,
+      currency: sub.currency,
+      daysLeft: Math.max(0, dayjs(sub.renewalDate).startOf("day").diff(dayjs().startOf("day"), "day")),
+    }));
+
+  const nextRenewalDate = upcomingSubscriptions[0]
+    ? activeSubscriptions.find((sub) => sub.id === upcomingSubscriptions[0].id)?.renewalDate
+    : null;
+
+  useEffect(() => {
+    if (!token || hasLoaded) {
+      return;
+    }
+
+    fetchSubscriptions(token).catch((error) => {
+      console.error("[Home] Failed to fetch subscriptions:", error);
+    });
+  }, [fetchSubscriptions, hasLoaded, token]);
+
+  const handleCreateSubscription = async (payload: {
+    name: string;
+    price: number;
+    frequency: SubscriptionFrequency;
+    category: SubscriptionCategory;
+    paymentMethod: string;
+    startDate: string;
+  }) => {
+    if (!token) {
+      throw new Error("You are not signed in.");
+    }
+
+    try {
+      await createSubscription(payload, token);
+      toast.show("Subscription created", {
+        type: "success",
+        placement: "top",
+        duration: 2500,
+      });
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || error?.response?.data?.message || "Failed to create subscription";
+
+      toast.show(errorMessage, {
+        type: "danger",
+        placement: "top",
+        duration: 3000,
+      });
+      throw error;
+    }
   };
 
   return (
@@ -38,8 +109,8 @@ export default function App() {
             <>      
               <View className="home-header">
                 <View className="home-user">
-                  <Image source={images.avatar} className="home-avatar" />
-                  <Text className="home-user-name">{HOME_USER.name}</Text>
+                  <Image source={user?.profileImage ? { uri: user.profileImage } : images.avatar} className="home-avatar" />
+                  <Text className="home-user-name">{user?.name || "Recurrly Member"}</Text>
                 </View>
 
                 <Pressable
@@ -58,10 +129,10 @@ export default function App() {
 
                 <View className="home-balance-row">
                   <Text className="home-balance-amount">
-                    {formatCurrency(HOME_BALANCE.amount)}
+                    {formatCurrency(homeBalance)}
                   </Text>
                   <Text className="home-balance-date">
-                    {dayjs(HOME_BALANCE.nextRenewalDate).format("MM/DD")}
+                    {nextRenewalDate ? dayjs(nextRenewalDate).format("MM/DD") : "--/--"}
                   </Text>
                 </View>
                 
@@ -70,13 +141,15 @@ export default function App() {
               <View className="mb-5">
                 <ListHeading title="Upcoming Renewals" />
                 <FlatList
-                  data={UPCOMING_SUBSCRIPTIONS}
-                  renderItem={({ item }) => <UpcommingSubscriptionCard {...item} />}
+                  data={upcomingSubscriptions}
+                  renderItem={({ item }) => <UpcomingSubscriptionCard {...item} />}
                   keyExtractor={(item) => item.id} 
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   ListEmptyComponent={<Text className="home-empty-state">No upcoming renewals yet.</Text>}
                 />
+                {isLoading ? <Text className="home-empty-state">Loading subscriptions...</Text> : null}
+                {error ? <Text className="home-empty-state">{error}</Text> : null}
               </View>
               
               <ListHeading title="All Subscriptions" />

@@ -1,12 +1,24 @@
+/**
+ * Sign-Up Screen (OTP-Based)
+ * 
+ * Purpose:
+ * - Handle user registration via Email OTP
+ * - Three-step flow: Name+Email -> OTP verification -> Account created
+ * 
+ * Key Features:
+ * - Email and name validation
+ * - OTP request and verification
+ * - Form validation
+ * - Accessible form inputs
+ */
+
 import "@/global.css";
 import { clsx } from "clsx";
-import { useSignUp } from "@clerk/expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { type Href, Link, useRouter } from "expo-router";
-import React from "react";
+import { Link, useRouter } from "expo-router";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   Text,
   TextInput,
@@ -15,174 +27,119 @@ import {
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView as RNKeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { styled } from "nativewind";
+import { useAuth } from "@/context/AuthContext";
+import { useToast } from "react-native-toast-notifications";
 
 const SafeAreaView = styled(RNSafeAreaView);
 const KeyboardAwareScrollView = styled(RNKeyboardAwareScrollView);
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const otpRegex = /^\d{6}$/;
 
-type SignUpFieldErrors = {
-  emailAddress?: string;
-  password?: string;
-  confirmPassword?: string;
-  code?: string;
-};
+interface SignUpFieldErrors {
+  name?: string;
+  email?: string;
+  otp?: string;
+}
 
 const SignUpScreen = () => {
-  const { signUp, errors, fetchStatus } = useSignUp();
+  const { sendOTP, verifyOTP } = useAuth();
   const router = useRouter();
+  const toast = useToast();
+  const otpNavigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [confirmPassword, setConfirmPassword] = React.useState("");
-  const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = React.useState(false);
-  const [code, setCode] = React.useState("");
-  const [isVerificationStep, setIsVerificationStep] = React.useState(false);
-  const [clientErrors, setClientErrors] = React.useState<SignUpFieldErrors>({});
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<SignUpFieldErrors>({});
+  const [step, setStep] = useState<"signup" | "otp">("signup");
+  const [resendTimer, setResendTimer] = useState(0);
 
-  const isFetching = fetchStatus === "fetching";
-  const hasPendingEmailVerification =
-    signUp?.status === "missing_requirements" &&
-    signUp.unverifiedFields.includes("email_address");
-  const requiresEmailCode = isVerificationStep || hasPendingEmailVerification;
-
-  const globalError = errors.global?.[0]?.message ?? null;
-  const emailError = clientErrors.emailAddress ?? errors.fields.emailAddress?.message;
-  const passwordError = clientErrors.password ?? errors.fields.password?.message;
-  const codeError = clientErrors.code ?? errors.fields.code?.message;
-
-  const finalizeAndNavigate = async () => {
-    if (!signUp) {
-      return;
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
     }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [resendTimer]);
 
-    await signUp.finalize({
-      navigate: ({ session, decorateUrl }) => {
-        if (session?.currentTask) {
-          router.replace("/(tabs)");
-          return;
-        }
+  useEffect(() => {
+    return () => {
+      if (otpNavigateTimeoutRef.current) {
+        clearTimeout(otpNavigateTimeoutRef.current);
+        otpNavigateTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
-        const url = decorateUrl("/(tabs)");
-        if (Platform.OS === "web" && typeof window !== "undefined" && url.startsWith("http")) {
-          window.location.href = url;
-          return;
-        }
+  const handleCreateAccount = async () => {
+    try {
+      if (!name.trim()) {
+        setErrors((prev) => ({ ...prev, name: "Name is required" }));
+        return;
+      }
+      if (!email.trim()) {
+        setErrors((prev) => ({ ...prev, email: "Email is required" }));
+        return;
+      }
+      if (!emailRegex.test(email.trim())) {
+        setErrors((prev) => ({ ...prev, email: "Enter a valid email" }));
+        return;
+      }
 
-        router.replace(url as Href);
-      },
-    });
-  };
+      setIsLoading(true);
 
-  const validateSignUp = (): SignUpFieldErrors => {
-    const nextErrors: SignUpFieldErrors = {};
+      await sendOTP(email, name);
 
-    if (!emailAddress.trim()) {
-      nextErrors.emailAddress = "Email is required.";
-    } else if (!emailRegex.test(emailAddress.trim())) {
-      nextErrors.emailAddress = "Enter a valid email address.";
-    }
-
-    if (!password) {
-      nextErrors.password = "Password is required.";
-    } else if (password.length < 8) {
-      nextErrors.password = "Use at least 8 characters.";
-    } else if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-      nextErrors.password = "Include both letters and numbers.";
-    }
-
-    if (!confirmPassword) {
-      nextErrors.confirmPassword = "Confirm your password.";
-    } else if (confirmPassword !== password) {
-      nextErrors.confirmPassword = "Passwords do not match.";
-    }
-
-    return nextErrors;
-  };
-
-  const handleSubmit = async () => {
-    if (!signUp || isFetching) {
-      return;
-    }
-
-    const nextErrors = validateSignUp();
-    setClientErrors(nextErrors);
-
-    if (Object.keys(nextErrors).length > 0) {
-      return;
-    }
-
-    const { error } = await signUp.password({
-      emailAddress: emailAddress.trim(),
-      password,
-    });
-
-    if (error) {
-      return;
-    }
-
-    if (signUp.status === "complete") {
-      await finalizeAndNavigate();
-      return;
-    }
-
-    const { error: sendCodeError } = await signUp.verifications.sendEmailCode();
-    if (!sendCodeError) {
-      setIsVerificationStep(true);
+      toast.show("Code sent to your email", { type: "success" });
+      setStep("otp");
+      setOtp("");
+      setResendTimer(60);
+      setErrors({});
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || error?.response?.data?.message || "Failed to send OTP";
+      console.error("[SignUp] Error:", errorMessage);
+      setErrors((prev) => ({ ...prev, email: errorMessage }));
+      toast.show(errorMessage, { type: "error" });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleVerify = async () => {
-    if (!signUp || isFetching) {
-      return;
-    }
+  const handleVerifyOTP = async () => {
+    try {
+      if (!otp.trim() || !otpRegex.test(otp)) {
+        setErrors((prev) => ({ ...prev, otp: "OTP must be 6 digits" }));
+        return;
+      }
 
-    const trimmedCode = code.trim();
-    if (trimmedCode.length < 6) {
-      setClientErrors((prev) => ({ ...prev, code: "Enter the 6-digit code from your email." }));
-      return;
-    }
+      setIsLoading(true);
+      await verifyOTP(email, otp);
 
-    setClientErrors((prev) => ({ ...prev, code: undefined }));
-
-    const { error } = await signUp.verifications.verifyEmailCode({ code: trimmedCode });
-    if (error) {
-      return;
-    }
-
-    if (signUp.status === "complete") {
-      await finalizeAndNavigate();
+      toast.show("Account created successfully!", { type: "success" });
+      otpNavigateTimeoutRef.current = setTimeout(() => {
+        router.replace("/(tabs)");
+        otpNavigateTimeoutRef.current = null;
+      }, 500);
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || error?.response?.data?.message || "Failed to verify OTP";
+      console.error("[SignUp] Error:", errorMessage);
+      setErrors((prev) => ({ ...prev, otp: errorMessage }));
+      toast.show(errorMessage, { type: "error" });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const resendCode = async () => {
-    if (!signUp || isFetching) {
-      return;
-    }
-
-    await signUp.verifications.sendEmailCode();
-  };
-
-  const restartSignUp = async () => {
-    if (!signUp || isFetching) {
-      return;
-    }
-
-    await signUp.reset();
-    setCode("");
-    setIsVerificationStep(false);
-  };
-
-  const isSubmitDisabled =
-    isFetching ||
-    !emailAddress.trim() ||
-    !password ||
-    !confirmPassword ||
-    Boolean(emailError) ||
-    Boolean(passwordError) ||
-    Boolean(clientErrors.confirmPassword);
-  const isVerifyDisabled = isFetching || code.trim().length < 6;
+  const canCreateAccount = name.trim() && email.trim() && emailRegex.test(email.trim()) && !isLoading;
+  const canVerifyOTP = otp.trim() && otpRegex.test(otp) && !isLoading;
 
   return (
     <SafeAreaView className="auth-safe-area">
@@ -193,177 +150,129 @@ const SignUpScreen = () => {
         showsVerticalScrollIndicator={false}
         enableOnAndroid
         extraScrollHeight={24}
-        keyboardOpeningTime={0}
-        enableAutomaticScroll
       >
-          <View className="auth-brand-block">
-            <View className="auth-logo-wrap">
-              <View className="auth-logo-mark">
-                <Text className="auth-logo-mark-text">R</Text>
-              </View>
-              <View>
-                <Text className="auth-wordmark">Recurrly</Text>
-                <Text className="auth-wordmark-sub">Smart billing</Text>
-              </View>
+        <View className="auth-brand-block">
+          <View className="auth-logo-wrap">
+            <View className="auth-logo-mark">
+              <Text className="auth-logo-mark-text">R</Text>
             </View>
-            <Text className="auth-title">Create account</Text>
-            <Text className="auth-subtitle">
-              Sign up to start managing your subscriptions
-            </Text>
+            <View>
+              <Text className="auth-wordmark">Recurrly</Text>
+              <Text className="auth-wordmark-sub">Smart billing</Text>
+            </View>
           </View>
+          <Text className="auth-title">
+            {step === "signup" ? "Create account" : "Verify email"}
+          </Text>
+          <Text className="auth-subtitle">
+            {step === "signup"
+              ? "Start managing subscriptions today"
+              : `Code sent to ${email}`}
+          </Text>
+        </View>
 
-          <View className="auth-card">
-            {requiresEmailCode ? (
-              <View className="auth-form">
-                <View className="auth-field">
-                  <Text className="auth-label">Verification code</Text>
-                  <TextInput
-                    value={code}
-                    onChangeText={setCode}
-                    placeholder="Enter 6-digit code"
-                    placeholderTextColor="rgba(0, 0, 0, 0.45)"
-                    keyboardType="number-pad"
-                    autoCapitalize="none"
-                    textContentType="oneTimeCode"
-                    className={clsx("auth-input", codeError && "auth-input-error")}
-                  />
-                  {codeError ? <Text className="auth-error">{codeError}</Text> : null}
-                  <Text className="auth-helper">
-                    Check your inbox and verify your email to secure your account.
-                  </Text>
-                </View>
-
-                {globalError ? <Text className="auth-error">{globalError}</Text> : null}
-
-                <Pressable
-                  onPress={handleVerify}
-                  disabled={isVerifyDisabled}
-                  className={clsx("auth-button", isVerifyDisabled && "auth-button-disabled")}
-                >
-                  {isFetching ? (
-                    <ActivityIndicator color="#081126" />
-                  ) : (
-                    <Text className="auth-button-text">Verify and get started</Text>
-                  )}
-                </Pressable>
-
-                <Pressable onPress={resendCode} disabled={isFetching} className="auth-secondary-button">
-                  <Text className="auth-secondary-button-text">Send a new code</Text>
-                </Pressable>
-
-                <Pressable onPress={restartSignUp} disabled={isFetching} className="auth-secondary-button">
-                  <Text className="auth-secondary-button-text">Start over</Text>
-                </Pressable>
-
-                <View nativeID="clerk-captcha" />
+        <View className="auth-card">
+          {step === "signup" ? (
+            <View className="auth-form">
+              <View className="auth-field">
+                <Text className="auth-label">Full name</Text>
+                <TextInput
+                  value={name}
+                  onChangeText={(text) => {
+                    setName(text);
+                    if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  placeholder="Your name"
+                  placeholderTextColor="rgba(0, 0, 0, 0.45)"
+                  editable={!isLoading}
+                  className="auth-input"
+                />
+                {errors.name && <Text className="auth-error-text">{errors.name}</Text>}
               </View>
-            ) : (
-              <View className="auth-form">
-                <View className="auth-field">
-                  <Text className="auth-label">Email</Text>
-                  <TextInput
-                    value={emailAddress}
-                    onChangeText={setEmailAddress}
-                    placeholder="Enter your email"
-                    placeholderTextColor="rgba(0, 0, 0, 0.45)"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    textContentType="emailAddress"
-                    className={clsx("auth-input", emailError && "auth-input-error")}
-                  />
-                  {emailError ? <Text className="auth-error">{emailError}</Text> : null}
-                </View>
 
-                <View className="auth-field">
-                  <Text className="auth-label">Password</Text>
-                  <View className="relative">
-                    <TextInput
-                      value={password}
-                      onChangeText={setPassword}
-                      placeholder="Enter your password"
-                      placeholderTextColor="rgba(0, 0, 0, 0.45)"
-                      secureTextEntry={!isPasswordVisible}
-                      textContentType="newPassword"
-                      className={clsx("auth-input", passwordError && "auth-input-error")}
-                      style={{ paddingRight: 52 }}
-                    />
-                    <Pressable
-                      onPress={() => setIsPasswordVisible((prev) => !prev)}
-                      accessibilityRole="button"
-                      accessibilityLabel={isPasswordVisible ? "Hide password" : "Show password"}
-                      hitSlop={10}
-                      style={{ position: "absolute", right: 16, top: "50%", marginTop: -10 }}
-                    >
-                      <Ionicons
-                        name={isPasswordVisible ? "eye-off-outline" : "eye-outline"}
-                        size={20}
-                        color="#3f5478"
-                      />
-                    </Pressable>
-                  </View>
-                  {passwordError ? <Text className="auth-error">{passwordError}</Text> : null}
-                </View>
-
-                <View className="auth-field">
-                  <Text className="auth-label">Confirm password</Text>
-                  <View className="relative">
-                    <TextInput
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      placeholder="Re-enter your password"
-                      placeholderTextColor="rgba(0, 0, 0, 0.45)"
-                      secureTextEntry={!isConfirmPasswordVisible}
-                      textContentType="newPassword"
-                      className={clsx(
-                        "auth-input",
-                        clientErrors.confirmPassword && "auth-input-error",
-                      )}
-                      style={{ paddingRight: 52 }}
-                    />
-                    <Pressable
-                      onPress={() => setIsConfirmPasswordVisible((prev) => !prev)}
-                      accessibilityRole="button"
-                      accessibilityLabel={isConfirmPasswordVisible ? "Hide confirm password" : "Show confirm password"}
-                      hitSlop={10}
-                      style={{ position: "absolute", right: 16, top: "50%", marginTop: -10 }}
-                    >
-                      <Ionicons
-                        name={isConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"}
-                        size={20}
-                        color="#3f5478"
-                      />
-                    </Pressable>
-                  </View>
-                  {clientErrors.confirmPassword ? (
-                    <Text className="auth-error">{clientErrors.confirmPassword}</Text>
-                  ) : null}
-                </View>
-
-                {globalError ? <Text className="auth-error">{globalError}</Text> : null}
-
-                <Pressable
-                  onPress={handleSubmit}
-                  disabled={isSubmitDisabled}
-                  className={clsx("auth-button", isSubmitDisabled && "auth-button-disabled")}
-                >
-                  {isFetching ? (
-                    <ActivityIndicator color="#081126" />
-                  ) : (
-                    <Text className="auth-button-text">Create account</Text>
-                  )}
-                </Pressable>
-
-                <View className="auth-link-row">
-                  <Text className="auth-link-copy">Already have an account?</Text>
-                  <Link href="/(auth)/sign-in">
-                    <Text className="auth-link">Sign in</Text>
-                  </Link>
-                </View>
-
-                <View nativeID="clerk-captcha" />
+              <View className="auth-field">
+                <Text className="auth-label">Email address</Text>
+                <TextInput
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                  }}
+                  placeholder="your@email.com"
+                  placeholderTextColor="rgba(0, 0, 0, 0.45)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  editable={!isLoading}
+                  className="auth-input"
+                />
+                {errors.email && <Text className="auth-error-text">{errors.email}</Text>}
               </View>
-            )}
-          </View>
+
+              <Pressable
+                onPress={handleCreateAccount}
+                disabled={!canCreateAccount}
+                className={clsx("auth-button", !canCreateAccount && "auth-button-disabled")}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="auth-button-text">Send code</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <View className="auth-form">
+              <View className="auth-field">
+                <Text className="auth-label">Enter 6-digit code</Text>
+                <TextInput
+                  value={otp}
+                  onChangeText={(text) => {
+                    setOtp(text.replace(/[^0-9]/g, "").slice(0, 6));
+                    if (errors.otp) setErrors((prev) => ({ ...prev, otp: undefined }));
+                  }}
+                  placeholder="000000"
+                  placeholderTextColor="rgba(0, 0, 0, 0.45)"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  editable={!isLoading}
+                  className="auth-input text-center text-xl tracking-widest"
+                />
+                {errors.otp && <Text className="auth-error-text">{errors.otp}</Text>}
+              </View>
+
+              <Pressable
+                onPress={handleVerifyOTP}
+                disabled={!canVerifyOTP}
+                className={clsx("auth-button", !canVerifyOTP && "auth-button-disabled")}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="auth-button-text">Create account</Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={() => setStep("signup")}
+                disabled={isLoading}
+                className="mt-4"
+              >
+                <Text className="text-center text-gray-600">
+                  <Ionicons name="chevron-back" size={14} /> Back
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+
+        <View className="auth-footer">
+          <Text className="auth-footer-text">
+            Already have an account?{" "}
+            <Link href="/(auth)/sign-in" className="text-blue-600 font-semibold">
+              Sign in
+            </Link>
+          </Text>
+        </View>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

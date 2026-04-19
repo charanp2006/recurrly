@@ -29,7 +29,7 @@ declare global {
         icon: ImageSourcePropType;
         name: string;
         plan?: string;
-        category?: string;
+        category?: SubscriptionCategory;
         frequency?: SubscriptionFrequency;
         paymentMethod?: string;
         status?: string;
@@ -62,7 +62,14 @@ declare global {
 
     interface ListHeadingProps {
         title: string;
+        onPress?: () => void;
     }
 }
+
+export type SubscriptionFrequency = globalThis.SubscriptionFrequency;
+export type SubscriptionCategory = globalThis.SubscriptionCategory;
+export type AppTab = globalThis.AppTab;
+export type Subscription = globalThis.Subscription;
+export type UpcomingSubscription = globalThis.UpcomingSubscription;
 
 export {};

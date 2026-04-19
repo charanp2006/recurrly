@@ -1,6 +1,5 @@
 import "@/global.css";
 import React from "react";
-import { HOME_SUBSCRIPTIONS } from "@/constants/data";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
@@ -12,6 +11,9 @@ import {
 } from "react-native";
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
+import { useSubscriptionsStore } from "@/stores/subscriptionsStore";
+import { useAuth } from "@/context/AuthContext";
+import type { Subscription } from "@/type";
 
 const SafeAreaView = styled(RNSafeAreaView);
 
@@ -30,20 +32,34 @@ const searchableFields = (subscription: Subscription) =>
     .toLowerCase();
 
 const Subscriptions = () => {
+  const subscriptions = useSubscriptionsStore((state) => state.subscriptions);
+  const hasLoaded = useSubscriptionsStore((state) => state.hasLoaded);
+  const fetchSubscriptions = useSubscriptionsStore((state) => state.fetchSubscriptions);
+  const { token } = useAuth();
   const [query, setQuery] = React.useState("");
   const [expandedSubscriptionId, setExpandedSubscriptionId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!token || hasLoaded) {
+      return;
+    }
+
+    fetchSubscriptions(token).catch((error) => {
+      console.error("[Subscriptions] Failed to fetch subscriptions:", error);
+    });
+  }, [fetchSubscriptions, hasLoaded, token]);
 
   const filteredSubscriptions = React.useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     if (!normalizedQuery) {
-      return HOME_SUBSCRIPTIONS;
+      return subscriptions;
     }
 
-    return HOME_SUBSCRIPTIONS.filter((subscription) =>
+    return subscriptions.filter((subscription) =>
       searchableFields(subscription).includes(normalizedQuery),
     );
-  }, [query]);
+  }, [query, subscriptions]);
 
   const clearQuery = () => setQuery("");
 
@@ -54,6 +70,7 @@ const Subscriptions = () => {
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerClassName="sub-list-content"
         ItemSeparatorComponent={() => <View className="h-4" />}
         ListHeaderComponent={() => (
@@ -76,7 +93,13 @@ const Subscriptions = () => {
                 className="sub-search-input"
               />
               {query.length > 0 ? (
-                <Pressable onPress={clearQuery} hitSlop={10} className="sub-search-clear">
+                <Pressable
+                  onPress={clearQuery}
+                  hitSlop={10}
+                  className="sub-search-clear"
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button"
+                >
                   <Ionicons name="close-circle" size={18} color="#6f6f6f" />
                 </Pressable>
               ) : null}

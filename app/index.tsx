@@ -1,53 +1,45 @@
-import "@/global.css";
-import { useAuth } from "@clerk/expo";
-import { Redirect } from "expo-router";
+/**
+ * App Entry Point / Auth Gate
+ * 
+ * Purpose:
+ * - Check authentication state
+ * - Redirect to appropriate screen based on auth status
+ * - Show loading state while checking auth
+ * 
+ * Key Features:
+ * - Checks for valid token and user data
+ * - Redirects to sign-in if not authenticated
+ * - Redirects to main app if authenticated
+ * - Shows splash screen while loading
+ * 
+ * Dependencies:
+ * - useAuth hook from AuthContext
+ * - expo-router for navigation
+ */
 
-// export default function App() {
-//   return (
-//     <View className="flex-1 items-center justify-center bg-background">
-//       <Text className="text-xl font-bold text-success">
-//         Welcome to Nativewind!
-//       </Text>
-//       <Link
-//         href="/onboarding"
-//         className="mt-4 rounded bg-primary px-4 py-2 text-white"
-//       >
-//         <Text>Go to Onboarding</Text>
-//       </Link>
-//       <Link
-//         href="/(auth)/sign-in"
-//         className="mt-4 rounded bg-primary px-4 py-2 text-white"
-//       >
-//         <Text>Go to Sign In</Text>
-//       </Link>
-//       <Link
-//         href="/(auth)/sign-up"
-//         className="mt-4 rounded bg-primary px-4 py-2 text-white"
-//       >
-//         <Text>Go to Sign Up</Text>
-//       </Link>
-//       <Link
-//         href={`/subscriptions/[id]?id=youtube`}
-//         className="mt-4 rounded bg-primary px-4 py-2 text-white"
-//       >
-//         <Text>Youtube Subscription</Text>
-//       </Link>
-//       <Link
-//         href={{ pathname: "/subscriptions/[id]", params: { id: "claude" } }}
-//         className="mt-4 rounded bg-primary px-4 py-2 text-white"
-//       >
-//         <Text>CLaude Max Subscription</Text>
-//       </Link>
-//     </View>
-//   );
-// }
+import "@/global.css";
+import { useAuth } from "@/context/AuthContext";
+import { Redirect } from "expo-router";
+import AppSplash from "@/components/AppSplash";
+import { useEffect } from "react";
 
 export default function Index() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoading, isSignedIn } = useAuth();
 
-  if (!isLoaded) {
-    return null;
+  useEffect(() => {
+    console.log("[Index] Auth state changed", { isSignedIn, isLoading });
+  }, [isLoading, isSignedIn]);
+
+  if (isLoading) {
+    return <AppSplash />;
   }
 
-  return <Redirect href={isSignedIn ? "/(tabs)" : "/(auth)/sign-in"} />;
+  // Redirect based on authentication status
+  if (isSignedIn) {
+    console.log("[Index] Redirecting to main app");
+    return <Redirect href="/(tabs)" />;
+  }
+
+  console.log("[Index] Redirecting to sign-in");
+  return <Redirect href="/(auth)/sign-in" />;
 }

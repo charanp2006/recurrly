@@ -1,4 +1,10 @@
 import { icons } from "./icons";
+import type {
+    AppTab,
+    Subscription,
+    SubscriptionCategory,
+    UpcomingSubscription,
+} from "@/type";
 
 export const SUBSCRIPTION_FREQUENCIES = ["Monthly", "Yearly"] as const;
 
@@ -28,7 +34,7 @@ export const tabs: AppTab[] = [
     { name: "index", title: "Home", icon: icons.home },
     { name: "subscriptions", title: "Subscriptions", icon: icons.wallet },
     { name: "insights", title: "Insights", icon: icons.activity },
-    { name: "settings", title: "Settings", icon: icons.setting },
+    { name: "settings", title: "Profile", icon: icons.setting },
 ];
 
 export const HOME_USER = {
@@ -41,12 +47,13 @@ export const HOME_BALANCE = {
 };
 
 export const UPCOMING_SUBSCRIPTIONS: UpcomingSubscription[] = [
+    // Sample values modeled on common USD subscription pricing.
     {
         id: "spotify",
         icon: icons.spotify,
         name: "Spotify",
         price: 5.99,
-        currency: "INR",
+        currency: "USD",
         daysLeft: 2,
     },
     {
@@ -54,7 +61,7 @@ export const UPCOMING_SUBSCRIPTIONS: UpcomingSubscription[] = [
         icon: icons.notion,
         name: "Notion",
         price: 12.0,
-        currency: "INR",
+        currency: "USD",
         daysLeft: 4,
     },
     {
@@ -62,7 +69,7 @@ export const UPCOMING_SUBSCRIPTIONS: UpcomingSubscription[] = [
         icon: icons.figma,
         name: "Figma",
         price: 15.0,
-        currency: "INR",
+        currency: "USD",
         daysLeft: 6,
     },
 ];
@@ -78,7 +85,7 @@ export const HOME_SUBSCRIPTIONS: Subscription[] = [
         status: "active",
         startDate: "2025-03-20T10:00:00.000Z",
         price: 77.49,
-        currency: "INR",
+        currency: "USD",
         billing: "Monthly",
         renewalDate: "2026-03-20T10:00:00.000Z",
         color: "#f5c542",
@@ -93,7 +100,7 @@ export const HOME_SUBSCRIPTIONS: Subscription[] = [
         status: "active",
         startDate: "2024-11-24T10:00:00.000Z",
         price: 9.99,
-        currency: "INR",
+        currency: "USD",
         billing: "Monthly",
         renewalDate: "2026-03-24T10:00:00.000Z",
         color: "#e8def8",
@@ -108,7 +115,7 @@ export const HOME_SUBSCRIPTIONS: Subscription[] = [
         status: "paused",
         startDate: "2025-06-27T10:00:00.000Z",
         price: 20.0,
-        currency: "INR",
+        currency: "USD",
         billing: "Monthly",
         renewalDate: "2026-03-27T10:00:00.000Z",
         color: "#b8d4e3",
@@ -123,7 +130,7 @@ export const HOME_SUBSCRIPTIONS: Subscription[] = [
         status: "cancelled",
         startDate: "2024-04-02T10:00:00.000Z",
         price: 119.99,
-        currency: "INR",
+        currency: "USD",
         billing: "Yearly",
         renewalDate: "2026-04-02T10:00:00.000Z",
         color: "#b8e8d0",
