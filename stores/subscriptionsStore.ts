@@ -19,8 +19,8 @@
  */
 
 import { create } from 'zustand';
-import { icons } from '@/constants/icons';
 import { SUBSCRIPTION_CATEGORY_COLORS } from '@/constants/data';
+import { getSubscriptionIconName } from '@/constants/subscriptionIcons';
 import { apiClient, toApiErrorMessage } from '@/lib/apiClient';
 
 interface CreateSubscriptionInput {
@@ -45,9 +45,15 @@ type ApiSubscription = {
   renewalDate?: string;
 };
 
+/**
+ * Maps UI frequency values to API-supported frequency keys.
+ */
 const mapFrequencyToApi = (frequency: SubscriptionFrequency) =>
   frequency === 'Yearly' ? 'yearly' : 'monthly';
 
+/**
+ * Maps API frequency values to UI display values with safe fallbacks.
+ */
 const mapFrequencyToUi = (frequency: ApiSubscription['frequency']): SubscriptionFrequency =>
   (() => {
     if (frequency === 'yearly') {
@@ -88,13 +94,22 @@ const UI_TO_CATEGORY_KEY: Record<SubscriptionCategory, string> = {
   Other: 'other',
 };
 
+/**
+ * Normalizes arbitrary category strings into lowercase underscore-separated keys.
+ */
 const normalizeCategoryKey = (value: string) =>
   value.trim().toLowerCase().replace(/\s+/g, '_');
 
+/**
+ * Maps UI category labels to backend category keys.
+ */
 const mapCategoryToApi = (category: SubscriptionCategory) => {
   return UI_TO_CATEGORY_KEY[category] || 'other';
 };
 
+/**
+ * Maps backend category keys to UI category labels.
+ */
 const mapApiCategoryToUi = (category?: string): SubscriptionCategory => {
   if (!category) {
     return 'Other';
@@ -104,17 +119,20 @@ const mapApiCategoryToUi = (category?: string): SubscriptionCategory => {
   return CATEGORY_KEY_TO_UI[normalized] || 'Other';
 };
 
+/**
+ * Normalizes API subscription payloads into UI subscription shape.
+ */
 const normalizeApiSubscription = (subscription: ApiSubscription): Subscription => {
   const category = mapApiCategoryToUi(subscription.category);
   const billing = mapFrequencyToUi(subscription.frequency);
 
   return {
     id: subscription._id,
-    icon: icons.wallet,
+    icon: getSubscriptionIconName(subscription.name),
     name: subscription.name,
     category,
     paymentMethod: subscription.paymentMethod || 'Not specified',
-    status: subscription.status || 'active',
+    status: (subscription.status as SubscriptionStatus) || 'active',
     startDate: subscription.startDate,
     renewalDate: subscription.renewalDate,
     billing,
@@ -125,6 +143,9 @@ const normalizeApiSubscription = (subscription: ApiSubscription): Subscription =
   };
 };
 
+/**
+ * Converts create form data into backend subscription payload format.
+ */
 const toCreatePayload = (subscription: CreateSubscriptionInput) => ({
   name: subscription.name,
   price: subscription.price,

@@ -1,7 +1,9 @@
-import type { ImageSourcePropType } from "react-native";
+import type { LucideIcon } from "lucide-react-native";
+import type { SubscriptionIconName } from "@/constants/subscriptionIcons";
 
 declare global {
     type SubscriptionFrequency = "Monthly" | "Yearly";
+    type SubscriptionStatus = "active" | "paused" | "cancelled";
 
     type SubscriptionCategory =
         | "Entertainment"
@@ -16,23 +18,23 @@ declare global {
     interface AppTab {
         name: string;
         title: string;
-        icon: ImageSourcePropType;
+        icon: LucideIcon;
     }
 
     interface TabIconProps {
         focused: boolean;
-        icon: ImageSourcePropType;
+        icon: LucideIcon;
     }
 
     interface Subscription {
         id: string;
-        icon: ImageSourcePropType;
+        icon: SubscriptionIconName;
         name: string;
         plan?: string;
         category?: SubscriptionCategory;
         frequency?: SubscriptionFrequency;
         paymentMethod?: string;
-        status?: string;
+        status?: SubscriptionStatus;
         startDate?: string;
         price: number;
         currency?: string;
@@ -50,7 +52,7 @@ declare global {
 
     interface UpcomingSubscription {
         id: string;
-        icon: ImageSourcePropType;
+        icon: SubscriptionIconName;
         name: string;
         price: number;
         currency?: string;
@@ -68,6 +70,7 @@ declare global {
 
 export type SubscriptionFrequency = globalThis.SubscriptionFrequency;
 export type SubscriptionCategory = globalThis.SubscriptionCategory;
+export type SubscriptionStatus = globalThis.SubscriptionStatus;
 export type AppTab = globalThis.AppTab;
 export type Subscription = globalThis.Subscription;
 export type UpcomingSubscription = globalThis.UpcomingSubscription;

@@ -21,7 +21,14 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { apiClient, checkApiHealth, getBaseURL, toApiErrorMessage } from '@/lib/apiClient';
+import {
+  apiClient,
+  checkApiHealth,
+  configureAuthLifecycle,
+  getBaseURL,
+  toApiErrorMessage,
+} from '@/lib/apiClient';
+import { isJwtExpired } from '@/lib/authToken';
 import { useSubscriptionsStore } from '@/stores/subscriptionsStore';
 
 const STORAGE_KEYS = {
@@ -59,6 +66,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const clearSession = useCallback(async () => {
+    useSubscriptionsStore.getState().reset();
+    setToken(null);
+    setUser(null);
+
+    try {
+      await SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN);
+      await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
+    } catch (storageError) {
+      console.error('[Auth] Failed to clear secure storage:', storageError);
+    }
+  }, []);
+
+  const persistSession = useCallback(async (nextToken: string, nextUser: any) => {
+    await SecureStore.setItemAsync(STORAGE_KEYS.TOKEN, nextToken);
+    await SecureStore.setItemAsync(STORAGE_KEYS.USER, JSON.stringify(nextUser));
+
+    setToken(nextToken);
+    setUser(nextUser);
+  }, []);
+
+  const refreshAccessToken = useCallback(async () => {
+    if (!token || isJwtExpired(token)) {
+      return null;
+    }
+
+    try {
+      const response = await apiClient.post(
+        '/auth/refresh-token',
+        {},
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      const refreshedToken = response?.data?.data?.token;
+      const nextUser = response?.data?.data?.user ?? user;
+
+      if (typeof refreshedToken !== 'string' || isJwtExpired(refreshedToken)) {
+        return null;
+      }
+
+      await persistSession(refreshedToken, nextUser);
+      return refreshedToken;
+    } catch {
+      return null;
+    }
+  }, [persistSession, token, user]);
+
+  const handleAuthFailure = useCallback(async () => {
+    await clearSession();
+  }, [clearSession]);
+
+  useEffect(() => {
+    configureAuthLifecycle({
+      getAccessToken: () => token,
+      refreshAccessToken,
+      onAuthFailure: handleAuthFailure,
+    });
+  }, [handleAuthFailure, refreshAccessToken, token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    if (isJwtExpired(token)) {
+      handleAuthFailure();
+    }
+  }, [handleAuthFailure, token]);
+
   /**
    * Initialize auth state from secure storage
    */
@@ -72,6 +148,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = await SecureStore.getItemAsync(STORAGE_KEYS.USER);
 
         if (storedToken && storedUser) {
+          if (isJwtExpired(storedToken)) {
+            console.log('[Auth] Stored token expired. Clearing session.');
+            await clearSession();
+            return;
+          }
+
           try {
             const parsedUser = JSON.parse(storedUser);
             setToken(storedToken);
@@ -93,7 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initializeAuth();
-  }, []);
+  }, [clearSession]);
 
   /**
    * Send OTP to email
@@ -148,12 +230,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Invalid verification response. Please try again.');
       }
 
-      // Store token and user in secure storage
-      await SecureStore.setItemAsync(STORAGE_KEYS.TOKEN, newToken);
-      await SecureStore.setItemAsync(STORAGE_KEYS.USER, JSON.stringify(userData));
+      if (isJwtExpired(newToken)) {
+        throw new Error('Session token expired. Please request a new code.');
+      }
 
-      setToken(newToken);
-      setUser(userData);
+      await persistSession(newToken, userData);
 
       console.log('[Auth] OTP verified and user logged in');
       return response.data;
@@ -162,7 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('[Auth] Error verifying OTP:', message);
       throw new Error(message);
     }
-  }, []);
+  }, [persistSession]);
 
   /**
    * Resend OTP
@@ -186,29 +267,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = useCallback(async () => {
     try {
       console.log('[Auth] Signing out...');
-      await apiClient.post(
-        '/auth/sign-out',
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      if (token) {
+        await apiClient.post(
+          '/auth/sign-out',
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
       console.log('[Auth] User signed out successfully');
     } catch (error) {
       console.error('[Auth] Error signing out:', toApiErrorMessage(error));
     } finally {
-      useSubscriptionsStore.getState().reset();
-
-      setToken(null);
-      setUser(null);
-
-      // Always clean storage even if network request fails.
-      try {
-        await SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN);
-        await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
-      } catch (storageError) {
-        console.error('[Auth] Failed to clear secure storage on sign out:', storageError);
-      }
+      await clearSession();
     }
-  }, [token]);
+  }, [clearSession, token]);
 
   /**
    * Update user profile
@@ -288,7 +360,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     token,
     isLoading,
-    isSignedIn: !!token && !!user,
+    isSignedIn: !!token && !!user && !isJwtExpired(token),
     sendOTP,
     verifyOTP,
     resendOTP,

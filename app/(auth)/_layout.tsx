@@ -11,9 +11,15 @@ import { useAuth } from "@/context/AuthContext";
 import { Redirect, Stack } from "expo-router";
 import { useEffect } from "react";
 
+/**
+ * Guards auth routes and redirects already signed-in users to tabs.
+ */
 export default function AuthLayout() {
   const { isLoading, isSignedIn } = useAuth();
 
+  /**
+   * Logs auth layout gate transitions for debugging route guards.
+   */
   useEffect(() => {
     console.log("[AuthLayout] Auth state changed", { isSignedIn, isLoading });
   }, [isLoading, isSignedIn]);

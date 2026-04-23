@@ -1,13 +1,23 @@
-import { View, Text, Image, Pressable } from "react-native";
+/**
+ * Subscription Card
+ *
+ * Purpose:
+ * - Renders a subscription summary row in compact mode
+ * - Expands to show billing metadata and status details
+ * - Serves home and subscriptions screens with shared UI
+ */
+import { View, Text, Pressable } from "react-native";
 import React from "react";
 import { formatCurrency, formatStatusLabel, formatSubscriptionDateTime } from "@/lib/utils";
 import { clsx } from "clsx";
+import SubscriptionIcon from "@/components/SubscriptionIcon";
+import type { Subscription } from "@/type";
 
 interface SubscriptionCardProps {
     name: string;
     price: number;
     currency?: string;
-    icon: any;
+    icon: Subscription["icon"];
     billing: string;
     color?: string;
     category?: string;
@@ -20,6 +30,9 @@ interface SubscriptionCardProps {
     status?: string;
 }
 
+/**
+ * Displays one subscription item with expandable metadata content.
+ */
 const SubscriptionCard = ({
     name,
     price,
@@ -36,68 +49,73 @@ const SubscriptionCard = ({
     startDate,
     status,
 }: SubscriptionCardProps) => {
+    /**
+     * Uses per-category color when available; falls back to neutral card color.
+     */
+    const cardBackground = color || "#fcf5dc";
+
   return (
     <Pressable
       onPress={onPress}
-      className={clsx("sub-card", expanded ? "sub-card-expanded" : "bg-card")}
-      style={!expanded && color ? { backgroundColor: color } : undefined}
+            className={clsx("rounded-3xl p-4", expanded ? "shadow-sm border border-black/10" : "")}
+            style={{ backgroundColor: cardBackground }}
     >
-        <View className="sub-head">
-            <View className="sub-main">
-            <Image source={icon} className="sub-icon" />
-            <View className="sub-copy">
-                <Text className="sub-title" numberOfLines={1}>
-                {name}
-                </Text>
-                <Text className="sub-meta" numberOfLines={1} ellipsizeMode="tail">
-                {category?.trim() || plan?.trim() || (renewalDate ? formatSubscriptionDateTime(renewalDate) : '') }
-                </Text>
-            </View>
-            </View>
-            <View className="sub-price-box">
-            <Text className="sub-price">{formatCurrency(price, currency)}</Text>
-            <Text className="sub-billing" numberOfLines={1}>
-                {billing}
-            </Text>
-            </View>
-        </View>
+            <View className="flex-row items-start justify-between gap-3">
+                <View className="flex-1 flex-row items-center gap-3">
+                    <View className="h-14 w-14 items-center justify-center rounded-2xl bg-white/60">
+                        <SubscriptionIcon iconName={icon} size={28} />
+                    </View>
 
-        {expanded && (
-            <View className="sub-bdy">
-                <View className="sub-details">
-                    <View className="sub-row">
-                        <View className="sub-row-copy">
-                            <Text className="sub-label">Payment:</Text>
-                            <Text className="sub-value" numberOfLines={1} ellipsizeMode="tail">{paymentMethod?.trim() || 'Not specified'}</Text>
-                        </View>
+                    <View className="min-w-0 flex-1">
+                        <Text className="text-[19px] font-sans-extrabold text-[#081126]" numberOfLines={1}>
+                            {name}
+                        </Text>
+                        <Text className="mt-1 text-[13px] font-sans-medium text-[#4b5563]" numberOfLines={1} ellipsizeMode="tail">
+                            {category?.trim() || plan?.trim() || (renewalDate ? formatSubscriptionDateTime(renewalDate) : "")}
+                        </Text>
                     </View>
-                    <View className="sub-row">
-                        <View className="sub-row-copy">
-                            <Text className="sub-label">Category:</Text>
-                            <Text className="sub-value" numberOfLines={1} ellipsizeMode="tail">{category?.trim() || plan?.trim() || 'Not specified'}</Text>
+                </View>
+
+                <View className="items-end">
+                    <Text className="text-[19px] font-sans-extrabold text-[#081126]">
+                        {formatCurrency(price, currency)}
+                    </Text>
+                    <Text className="mt-1 rounded-full bg-white/60 px-3 py-1 text-[12px] font-sans-semibold text-[#4b5563]" numberOfLines={1}>
+                        {billing}
+                    </Text>
+                </View>
+            </View>
+
+            {expanded ? (
+                <View className="mt-4 rounded-3xl bg-white/45 p-4">
+                    <View className="gap-3">
+                        <View className="flex-row items-center justify-between">
+                            <Text className="text-[14px] font-sans-medium text-[#4b5563]">Payment</Text>
+                            <Text className="text-[14px] font-sans-bold text-[#081126]" numberOfLines={1}>
+                                {paymentMethod?.trim() || "Not specified"}
+                            </Text>
                         </View>
-                    </View>
-                    <View className="sub-row">
-                        <View className="sub-row-copy">
-                            <Text className="sub-label">Started:</Text>
-                            <Text className="sub-value" numberOfLines={1} ellipsizeMode="tail">{startDate ? formatSubscriptionDateTime(startDate) : 'Not specified'}</Text>
+                        <View className="flex-row items-center justify-between">
+                            <Text className="text-[14px] font-sans-medium text-[#4b5563]">Started</Text>
+                            <Text className="text-[14px] font-sans-bold text-[#081126]" numberOfLines={1}>
+                                {startDate ? formatSubscriptionDateTime(startDate) : "Not specified"}
+                            </Text>
                         </View>
-                    </View>
-                    <View className="sub-row">
-                        <View className="sub-row-copy">
-                            <Text className="sub-label">Renewal date:</Text>
-                            <Text className="sub-value" numberOfLines={1} ellipsizeMode="tail">{renewalDate ? formatSubscriptionDateTime(renewalDate) : 'Not specified'}</Text>
+                        <View className="flex-row items-center justify-between">
+                            <Text className="text-[14px] font-sans-medium text-[#4b5563]">Renewal date</Text>
+                            <Text className="text-[14px] font-sans-bold text-[#081126]" numberOfLines={1}>
+                                {renewalDate ? formatSubscriptionDateTime(renewalDate) : "Not specified"}
+                            </Text>
                         </View>
-                    </View>
-                    <View className="sub-row">
-                        <View className="sub-row-copy">
-                            <Text className="sub-label">Status:</Text>
-                            <Text className="sub-value" numberOfLines={1} ellipsizeMode="tail">{status ? formatStatusLabel(status) : 'Not specified'}</Text>
+                        <View className="flex-row items-center justify-between">
+                            <Text className="text-[14px] font-sans-medium text-[#4b5563]">Status</Text>
+                            <Text className="text-[14px] font-sans-bold text-[#081126]" numberOfLines={1}>
+                                {status ? formatStatusLabel(status) : "Not specified"}
+                            </Text>
                         </View>
                     </View>
                 </View>
-            </View>
-        )}
+            ) : null}
     </Pressable>
   );
 };

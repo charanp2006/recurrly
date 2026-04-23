@@ -1,3 +1,11 @@
+/**
+ * API Client Module
+ *
+ * Purpose:
+ * - Resolves environment-aware API base URL for Expo/Web/Android emulator
+ * - Provides a shared Axios client with structured request/response logging
+ * - Redacts sensitive data from logs and maps transport errors to UI-safe text
+ */
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
@@ -5,8 +13,26 @@ import { Platform } from "react-native";
 const DEFAULT_API_PORT = 5500;
 const isDebug = process.env.NODE_ENV === "development";
 
+type AuthLifecycleHandlers = {
+  getAccessToken?: () => string | null;
+  refreshAccessToken?: () => Promise<string | null>;
+  onAuthFailure?: () => Promise<void> | void;
+};
+
+const authLifecycleHandlers: AuthLifecycleHandlers = {};
+
+type RetriableRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean;
+};
+
+/**
+ * Removes trailing slashes to normalize URL composition.
+ */
 const trimTrailingSlash = (value: unknown) => String(value ?? "").replace(/\/+$/, "");
 
+/**
+ * Ensures protocol presence for host values provided through env/config.
+ */
 const ensureProtocol = (value: unknown) => {
   const safeValue = String(value ?? "").trim();
   if (!safeValue) {
@@ -18,18 +44,30 @@ const ensureProtocol = (value: unknown) => {
   return `http://${safeValue}`;
 };
 
+/**
+ * Applies protocol and slash normalization to derive a stable base URL value.
+ */
 const sanitizeBaseUrl = (value: unknown) => {
   return trimTrailingSlash(ensureProtocol(value));
 };
 
+/**
+ * Checks whether a URL points to localhost-style hostnames.
+ */
 const isLocalhostHost = (value: unknown) => {
   return /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(String(value ?? ""));
 };
 
+/**
+ * Detects Android emulator runtime to remap localhost access.
+ */
 const isAndroidEmulator = () => {
   return Platform.OS === "android" && !Constants.isDevice;
 };
 
+/**
+ * Returns a human-readable runtime label for diagnostics.
+ */
 const getDeviceTypeLabel = () => {
   if (Platform.OS === "web") {
     return "web";
@@ -43,6 +81,9 @@ const getDeviceTypeLabel = () => {
   return "unknown-device";
 };
 
+/**
+ * Safely concatenates a base URL and endpoint path.
+ */
 const joinUrl = (baseURL: unknown = "", url: unknown = "") => {
   const safeBaseInput = String(baseURL ?? "");
   const safeUrlInput = String(url ?? "");
@@ -62,6 +103,9 @@ const joinUrl = (baseURL: unknown = "", url: unknown = "") => {
   return `${safeBase}${safePath}`;
 };
 
+/**
+ * Reads Expo host metadata so physical devices can reach local backend.
+ */
 const getHostFromExpo = (): string | null => {
   try {
     const hostUri =
@@ -81,6 +125,9 @@ const getHostFromExpo = (): string | null => {
   }
 };
 
+/**
+ * Rewrites localhost hostnames to Android emulator loopback bridge.
+ */
 const replaceAndroidEmulatorLocalhost = (urlValue: string) => {
   try {
     const parsedUrl = new URL(urlValue);
@@ -94,6 +141,9 @@ const replaceAndroidEmulatorLocalhost = (urlValue: string) => {
   }
 };
 
+/**
+ * Resolves best-effort API base URL across env override, Expo host, and local fallbacks.
+ */
 export const resolveApiBaseUrl = () => {
   try {
     const configured = process.env.EXPO_PUBLIC_API_URL;
@@ -137,6 +187,9 @@ export const resolveApiBaseUrl = () => {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
+/**
+ * Redacts sensitive request headers before log emission.
+ */
 const sanitizeHeaders = (headers: Record<string, any> | undefined) => {
   if (!headers) {
     return headers;
@@ -159,6 +212,9 @@ const sanitizeHeaders = (headers: Record<string, any> | undefined) => {
   return next;
 };
 
+/**
+ * Recursively masks sensitive keys in payloads used for diagnostics.
+ */
 const redactSensitiveData = (value: any): any => {
   if (value === null || value === undefined) {
     return value;
@@ -195,6 +251,9 @@ const redactSensitiveData = (value: any): any => {
   }, {});
 };
 
+/**
+ * Logs outgoing request metadata with optional payload redaction.
+ */
 const logRequest = (config: InternalAxiosRequestConfig) => {
   console.log("[API REQUEST]", {
     method: config.method?.toUpperCase(),
@@ -205,6 +264,9 @@ const logRequest = (config: InternalAxiosRequestConfig) => {
   });
 };
 
+/**
+ * Logs successful response metadata for API observability.
+ */
 const logResponse = (status: number, config: InternalAxiosRequestConfig, data: any) => {
   console.log("[API RESPONSE]", {
     method: config.method?.toUpperCase(),
@@ -214,6 +276,9 @@ const logResponse = (status: number, config: InternalAxiosRequestConfig, data: a
   });
 };
 
+/**
+ * Logs transport and response errors with network-context hints.
+ */
 const logError = (error: AxiosError) => {
   const fullUrl = joinUrl(error.config?.baseURL, error.config?.url);
   const isNetworkError = !!error.request && !error.response;
@@ -247,14 +312,33 @@ export const apiClient = axios.create({
   },
 });
 
+/**
+ * Exposes immutable resolved base URL for shared consumption.
+ */
 export const getBaseURL = () => API_BASE_URL;
 
+/**
+ * Performs backend health probe used by auth bootstrap and diagnostics.
+ */
 export const checkApiHealth = async () => {
   return apiClient.get('/health');
 };
 
+export const configureAuthLifecycle = (handlers: AuthLifecycleHandlers) => {
+  authLifecycleHandlers.getAccessToken = handlers.getAccessToken;
+  authLifecycleHandlers.refreshAccessToken = handlers.refreshAccessToken;
+  authLifecycleHandlers.onAuthFailure = handlers.onAuthFailure;
+};
+
 
 apiClient.interceptors.request.use((config) => {
+  const token = authLifecycleHandlers.getAccessToken?.();
+
+  if (token && !config.headers?.Authorization) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
   logRequest(config);
   return config;
 });
@@ -264,12 +348,46 @@ apiClient.interceptors.response.use(
     logResponse(response.status, response.config, response.data);
     return response;
   },
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     logError(error);
+
+    const originalRequest = error.config as RetriableRequestConfig | undefined;
+    const requestUrl = String(originalRequest?.url || "");
+    const isUnauthorized = error.response?.status === 401;
+    const isRefreshRequest = requestUrl.includes("/auth/refresh-token");
+    const isAuthEndpoint = requestUrl.includes("/auth/send-otp") || requestUrl.includes("/auth/verify-otp") || requestUrl.includes("/auth/resend-otp");
+
+    if (
+      isUnauthorized &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isRefreshRequest &&
+      !isAuthEndpoint
+    ) {
+      originalRequest._retry = true;
+
+      try {
+        const refreshedToken = await authLifecycleHandlers.refreshAccessToken?.();
+
+        if (refreshedToken) {
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers.Authorization = `Bearer ${refreshedToken}`;
+          return apiClient(originalRequest);
+        }
+      } catch (refreshError) {
+        console.error("[API AUTH] Token refresh failed", refreshError);
+      }
+
+      await authLifecycleHandlers.onAuthFailure?.();
+    }
+
     return Promise.reject(error);
   },
 );
 
+/**
+ * Converts unknown API/transport failures into user-safe message strings.
+ */
 export const toApiErrorMessage = (error: unknown) => {
   if (!axios.isAxiosError(error)) {
     return "Unexpected error occurred. Please try again.";

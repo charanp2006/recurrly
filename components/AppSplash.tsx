@@ -1,15 +1,37 @@
 /**
- * Branded splash / onboarding screen.
+ * App Splash Component
+ *
+ * Purpose:
+ * - Renders the branded entry experience used by onboarding and loading gates
+ * - Establishes visual identity before users navigate into authenticated flows
+ * - Provides a consistent first frame while app state initializes
  */
 
 import images from "@/constants/images";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "expo-router";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
 
 const SafeAreaView = styled(RNSafeAreaView);
 
-const AppSplash = () => {
+/**
+ * Displays the full-screen branded splash layout with headline and CTA.
+ */
+const AppSplash = ({ showCTA = true }: { showCTA?: boolean }) => {
+  const router = useRouter();
+  const { isSignedIn } = useAuth();
+
+  const handleGetStarted = () => {
+    if (isSignedIn) {
+      router.replace("/(tabs)");
+      return;
+    }
+
+    router.replace("/(auth)/sign-in");
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#eb7a53]">
       <View className="flex-1 px-4 pb-6 pt-2">
@@ -29,16 +51,18 @@ const AppSplash = () => {
             Track, analyze and cancel with ease
           </Text>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Get started"
-            className="mt-8 w-full max-w-[404px] rounded-full bg-white py-4"
-            onPress={() => {}}
-          >
-            <Text className="text-center text-[18px] font-sans-bold text-[#081126]">
-              Get Started
-            </Text>
-          </Pressable>
+          {showCTA ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Get started"
+              className="mt-8 w-full max-w-101 rounded-full bg-white py-4"
+              onPress={handleGetStarted}
+            >
+              <Text className="text-center text-[18px] font-sans-bold text-[#081126]">
+                Get Started
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </SafeAreaView>

@@ -42,6 +42,9 @@ interface SignUpFieldErrors {
   otp?: string;
 }
 
+/**
+ * Sign-up screen component for OTP-based account creation and verification.
+ */
 const SignUpScreen = () => {
   const { sendOTP, verifyOTP } = useAuth();
   const router = useRouter();
@@ -56,6 +59,9 @@ const SignUpScreen = () => {
   const [step, setStep] = useState<"signup" | "otp">("signup");
   const [resendTimer, setResendTimer] = useState(0);
 
+  /**
+   * Runs the resend cooldown timer while user is on OTP verification step.
+   */
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
     if (resendTimer > 0) {
@@ -68,6 +74,9 @@ const SignUpScreen = () => {
     };
   }, [resendTimer]);
 
+  /**
+   * Clears pending navigation timeout when this screen unmounts.
+   */
   useEffect(() => {
     return () => {
       if (otpNavigateTimeoutRef.current) {
@@ -77,6 +86,9 @@ const SignUpScreen = () => {
     };
   }, []);
 
+  /**
+   * Validates signup fields and requests an OTP for account creation.
+   */
   const handleCreateAccount = async () => {
     try {
       if (!name.trim()) {
@@ -112,6 +124,9 @@ const SignUpScreen = () => {
     }
   };
 
+  /**
+   * Validates OTP and completes account verification flow.
+   */
   const handleVerifyOTP = async () => {
     try {
       if (!otp.trim() || !otpRegex.test(otp)) {

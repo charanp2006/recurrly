@@ -1,11 +1,3 @@
-/**
- * Subscriptions Tab Screen
- *
- * Purpose:
- * - Lists all subscriptions with search and expansion support
- * - Fetches authenticated user's subscriptions on first entry
- * - Provides filtered discovery by name, plan, category, billing, and status
- */
 import "@/global.css";
 import React from "react";
 import SubscriptionsExplorer from "@/components/SubscriptionsExplorer";
@@ -16,38 +8,32 @@ import { useAuth } from "@/context/AuthContext";
 
 const SafeAreaView = styled(RNSafeAreaView);
 
-/**
- * Renders the subscriptions management tab with searchable, expandable cards.
- */
-const Subscriptions = () => {
+const Renewals = () => {
   const subscriptions = useSubscriptionsStore((state) => state.subscriptions);
   const hasLoaded = useSubscriptionsStore((state) => state.hasLoaded);
   const fetchSubscriptions = useSubscriptionsStore((state) => state.fetchSubscriptions);
   const { token } = useAuth();
 
-  /**
-   * Fetches subscriptions once per session when a valid token exists.
-   */
   React.useEffect(() => {
     if (!token || hasLoaded) {
       return;
     }
 
     fetchSubscriptions(token).catch((error) => {
-      console.error("[Subscriptions] Failed to fetch subscriptions:", error);
+      console.error("[Renewals] Failed to fetch subscriptions:", error);
     });
   }, [fetchSubscriptions, hasLoaded, token]);
 
   return (
     <SafeAreaView className="sub-screen">
       <SubscriptionsExplorer
-        title="Subscriptions"
-        subtitle="Search and manage your recurring services"
+        title="Renewals"
+        subtitle="Track upcoming renewals and active billing"
         sourceSubscriptions={subscriptions}
-        mode="all"
+        mode="renewals"
       />
     </SafeAreaView>
   );
 };
 
-export default Subscriptions;
+export default Renewals;
