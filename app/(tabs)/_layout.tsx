@@ -15,30 +15,43 @@
 
 import { tabs } from "@/constants/data";
 import { Redirect, Tabs } from "expo-router";
-import { View, Image } from "react-native";
+import { View } from "react-native";
 import { clsx } from "clsx";
 import { useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, components } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
+import type { LucideIcon } from "lucide-react-native";
 
 const tabBar = components.tabBar;
 
 interface TabIconProps {
   focused: boolean;
-  icon: any;
+  icon: LucideIcon;
 }
 
+/**
+ * Renders a tab icon wrapper with active-state styling.
+ */
 const TabIcon = ({ focused, icon }: TabIconProps) => {
+  const IconComponent = icon;
+
   return (
     <View className="tabs-icon">
       <View className={clsx("tabs-pill", focused && "tabs-active")}>
-        <Image source={icon} resizeMode="contain" className="tabs-glyph" />
+        <IconComponent
+          size={24}
+          color={focused ? "#fff9e3" : "#d7c8bb"}
+          strokeWidth={2.4}
+        />
       </View>
     </View>
   );
 };
 
+/**
+ * Main tabs layout that guards routes and configures bottom tab navigation.
+ */
 const TabLayout = () => {
   const { isLoading, isSignedIn } = useAuth();
   const insets = useSafeAreaInsets();
@@ -95,9 +108,17 @@ const TabLayout = () => {
         />
       ))}
       <Tabs.Screen
+        name="renewals"
+        options={{
+          href: null,
+          // tabBarButton: () => null,
+        }}
+      />
+      <Tabs.Screen
         name="subscriptions/[id]"
         options={{
           href: null,
+          // tabBarButton: () => null,
         }}
       />
     </Tabs>
