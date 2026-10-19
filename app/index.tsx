@@ -23,15 +23,21 @@ import { Redirect } from "expo-router";
 import AppSplash from "@/components/AppSplash";
 import { useEffect } from "react";
 
+/**
+ * Auth gate component that redirects users based on session state.
+ */
 export default function Index() {
   const { isLoading, isSignedIn } = useAuth();
 
+  /**
+   * Logs auth state transitions for app bootstrap diagnostics.
+   */
   useEffect(() => {
     console.log("[Index] Auth state changed", { isSignedIn, isLoading });
   }, [isLoading, isSignedIn]);
 
   if (isLoading) {
-    return <AppSplash />;
+    return <AppSplash showCTA={false} />;
   }
 
   // Redirect based on authentication status

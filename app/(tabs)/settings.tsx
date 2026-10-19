@@ -24,24 +24,27 @@ import * as ImagePicker from "expo-image-picker";
 import {
   ActivityIndicator,
   Image,
-  Modal,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { CircleUserRound } from "lucide-react-native";
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
-import images from "@/constants/images";
 import "@/global.css";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "react-native-toast-notifications";
+import BottomActionSheet from "@/components/BottomActionSheet";
 
 const SafeAreaView = styled(RNSafeAreaView);
 const StyledScrollView = styled(ScrollView);
 const StyledImage = styled(Image);
 
+/**
+ * Renders profile/settings screen with edit profile and sign-out actions.
+ */
 const Settings = () => {
   const { user, isLoading, signOut, updateProfile, uploadProfileImage } = useAuth();
   const router = useRouter();
@@ -51,23 +54,30 @@ const Settings = () => {
   const [isEditModalVisible, setIsEditModalVisible] = React.useState(false);
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
   const [name, setName] = React.useState("");
-  const [profileImage, setProfileImage] = React.useState("");
   const [isUploadingImage, setIsUploadingImage] = React.useState(false);
 
   const fullName = user?.name || "Recurrly Member";
   const email = user?.email || "No email available";
   const userImage = user?.profileImage || null;
 
+  /**
+   * Opens edit modal with current user values prefilled.
+   */
   const openEditModal = () => {
     setName(user?.name || "");
-    setProfileImage(user?.profileImage || "");
     setIsEditModalVisible(true);
   };
 
+  /**
+   * Closes profile edit modal.
+   */
   const closeEditModal = () => {
     setIsEditModalVisible(false);
   };
 
+  /**
+   * Validates and persists updated profile fields.
+   */
   const handleSaveProfile = async () => {
     try {
       if (isSavingProfile) return;
@@ -82,7 +92,6 @@ const Settings = () => {
 
       await updateProfile({
         name: name.trim(),
-        profileImage: profileImage.trim() || undefined,
       });
 
       toast.show("Profile updated successfully", { type: "success" });
@@ -97,6 +106,17 @@ const Settings = () => {
     }
   };
 
+  /**
+   * Uploads selected image payload to backend Cloudinary flow and returns hosted URL.
+   */
+  const uploadToCloudinary = async (fileDataUri: string) => {
+    const response = await uploadProfileImage(fileDataUri);
+    return response?.data?.imageUrl || null;
+  };
+
+  /**
+   * Launches image picker and uploads selected image as base64 data URI.
+   */
   const handlePickImage = async () => {
     try {
       if (isUploadingImage) return;
@@ -123,10 +143,8 @@ const Settings = () => {
       const dataUri = `data:${mimeType};base64,${result.assets[0].base64}`;
 
       console.log("[Profile] Uploading selected image");
-      const response = await uploadProfileImage(dataUri);
-      const uploadedUrl = response?.data?.imageUrl;
+      const uploadedUrl = await uploadToCloudinary(dataUri);
       if (uploadedUrl) {
-        setProfileImage(uploadedUrl);
         toast.show("Profile image updated", { type: "success" });
       } else {
         toast.show("Failed to update profile image", { type: "danger" });
@@ -139,6 +157,9 @@ const Settings = () => {
     }
   };
 
+  /**
+   * Performs sign-out flow and redirects user to sign-in route.
+   */
   const handleSignOut = async () => {
     if (isSigningOut) {
       return;
@@ -187,10 +208,13 @@ const Settings = () => {
         <Text className="settings-subtitle">Manage your account details</Text>
 
         <View className="settings-profile-card">
-          <StyledImage
-            source={userImage ? { uri: userImage } : images.avatar}
-            className="settings-avatar"
-          />
+          <View className="settings-avatar items-center justify-center overflow-hidden bg-[#f3e6b3]">
+            {userImage ? (
+              <StyledImage source={{ uri: userImage }} className="settings-avatar" />
+            ) : (
+              <CircleUserRound size={54} color="#081126" strokeWidth={2.1} />
+            )}
+          </View>
           <View className="settings-profile-copy">
             <Text className="settings-name" numberOfLines={1}>{fullName}</Text>
             <Text className="settings-email" numberOfLines={1}>{email}</Text>
@@ -239,21 +263,11 @@ const Settings = () => {
         </Pressable>
       </StyledScrollView>
 
-      <Modal
+      <BottomActionSheet
         visible={isEditModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeEditModal}
+        onClose={closeEditModal}
+        title="Edit Profile"
       >
-        <View className="modal-overlay">
-          <View className="modal-container">
-            <View className="modal-header">
-              <Text className="modal-title">Edit Profile</Text>
-              <Pressable onPress={closeEditModal} className="modal-close" accessibilityLabel="Close edit profile modal">
-                <Text className="modal-close-text">x</Text>
-              </Pressable>
-            </View>
-
             <View className="modal-body">
               <View className="auth-field">
                 <Text className="auth-label">Name</Text>
@@ -267,15 +281,7 @@ const Settings = () => {
               </View>
 
               <View className="auth-field">
-                <Text className="auth-label">Profile image URL</Text>
-                <TextInput
-                  value={profileImage}
-                  onChangeText={setProfileImage}
-                  placeholder="https://..."
-                  placeholderTextColor="rgba(0, 0, 0, 0.45)"
-                  autoCapitalize="none"
-                  className="auth-input"
-                />
+                <Text className="auth-label">Profile image</Text>
                 <Pressable
                   onPress={handlePickImage}
                   disabled={isUploadingImage}
@@ -307,9 +313,7 @@ const Settings = () => {
                 )}
               </Pressable>
             </View>
-          </View>
-        </View>
-      </Modal>
+      </BottomActionSheet>
     </SafeAreaView>
   );
 };

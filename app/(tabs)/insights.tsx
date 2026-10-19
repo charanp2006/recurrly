@@ -13,14 +13,16 @@
  */
 
 import React from "react";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
 import dayjs from "dayjs";
 import { router } from "expo-router";
 
+import BottomActionSheet from "@/components/BottomActionSheet";
+import SubscriptionsExplorer from "@/components/SubscriptionsExplorer";
+import SubscriptionIcon from "@/components/SubscriptionIcon";
 import { HOME_SUBSCRIPTIONS } from "@/constants/data";
-import { icons } from "@/constants/icons";
 import { formatCurrency } from "@/lib/utils";
 import { useSubscriptionsStore } from "@/stores/subscriptionsStore";
 import type { Subscription } from "@/type";
@@ -34,15 +36,15 @@ type WeeklyBar = {
   bubble?: string;
 };
 
-const weeklyBars: WeeklyBar[] = [
+const weeklyBars: ReadonlyArray<WeeklyBar> = [
   { label: "Mon", value: 36 },
   { label: "Tue", value: 31 },
   { label: "Wed", value: 22 },
-  { label: "Thr", value: 40, accent: true, bubble: "$40" },
+  { label: "Thu", value: 40, accent: true, bubble: "$40" },
   { label: "Fri", value: 34 },
   { label: "Sat", value: 20 },
   { label: "Sun", value: 24 },
-] as const;
+];
 
 type HistoryItem = {
   id: string;
@@ -50,15 +52,13 @@ type HistoryItem = {
   subtitle: string;
   amount: string;
   frequency: string;
-  icon: any;
+  icon: Subscription["icon"];
 };
 
 const toMonthlyAmount = (sub: Subscription) => (sub.billing === "Yearly" ? sub.price / 12 : sub.price);
 
 const buildHistoryItems = (subscriptions: Subscription[]): HistoryItem[] => {
-  const source = subscriptions.length ? subscriptions : HOME_SUBSCRIPTIONS;
-
-  return source.slice(0, 3).map((subscription) => {
+  return subscriptions.map((subscription) => {
     const monthlyAmount = toMonthlyAmount(subscription);
 
     return {
@@ -76,56 +76,74 @@ const buildHistoryItems = (subscriptions: Subscription[]): HistoryItem[] => {
 
 const Insights = () => {
   const subscriptions = useSubscriptionsStore((state) => state.subscriptions);
+  const [insightsSubscriptions, setInsightsSubscriptions] = React.useState<Subscription[]>([]);
+  const [isHistorySheetVisible, setIsHistorySheetVisible] = React.useState(false);
+
+  const baseSubscriptions = React.useMemo(
+    () => (subscriptions.length === 0 ? HOME_SUBSCRIPTIONS : subscriptions),
+    [subscriptions],
+  );
 
   const totals = React.useMemo(() => {
-    const activeSubscriptions = subscriptions.filter((sub) => sub.status === "active");
-    const source = activeSubscriptions.length ? activeSubscriptions : HOME_SUBSCRIPTIONS;
-
-    const monthlyCost = source.reduce((sum, sub) => sum + toMonthlyAmount(sub), 0);
+    const source = insightsSubscriptions.length > 0 ? insightsSubscriptions : baseSubscriptions;
+    const activeSubscriptions = source.filter((sub) => sub.status === "active");
+    const monthlyCost = activeSubscriptions.reduce((sum, sub) => sum + toMonthlyAmount(sub), 0);
 
     return {
       monthlyCost,
+      percentageChange: null as number | null,
       historyItems: buildHistoryItems(source),
     };
-  }, [subscriptions]);
+  }, [baseSubscriptions, insightsSubscriptions]);
 
   const chartHeight = 170;
   const chartMax = 45;
   const tickValues = [45, 35, 25, 5, 0];
-  const tickTops = [10, 56, 102, 154, 196];
+  const tickSpacing = tickValues.length > 1 ? chartHeight / (tickValues.length - 1) : 0;
+  const tickTops = tickValues.map((_, index) => Math.round(index * tickSpacing));
 
   return (
     <SafeAreaView className="flex-1 bg-[#fff7d9]">
+      <BottomActionSheet
+        visible={isHistorySheetVisible}
+        onClose={() => setIsHistorySheetVisible(false)}
+        title="All History"
+      >
+        <View className="mt-1 gap-3">
+          {totals.historyItems.map((item) => (
+            <View key={item.id} className="flex-row items-center rounded-2xl border border-black/10 bg-[#fcf5dc] px-4 py-4">
+              <View className="h-12 w-12 items-center justify-center rounded-xl bg-[#f3e6b3]">
+                <SubscriptionIcon iconName={item.icon} size={22} />
+              </View>
+
+              <View className="ml-3 flex-1">
+                <Text className="text-[17px] font-sans-bold text-[#081126]">{item.name}</Text>
+                <Text className="mt-1 text-[13px] font-sans-medium text-[#4b5563]">{item.subtitle}</Text>
+              </View>
+
+              <Text className="text-[16px] font-sans-extrabold text-[#081126]">{item.amount}</Text>
+            </View>
+          ))}
+        </View>
+      </BottomActionSheet>
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
-        <View className="px-4 pt-2">
-          <View className="relative flex-row items-center justify-between pb-4">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={() => router.back()}
-              className="z-10 h-12 w-12 items-center justify-center rounded-full border border-black/15 bg-transparent"
-            >
-              <Image source={icons.back} className="h-5 w-5" resizeMode="contain" />
-            </Pressable>
+        <SubscriptionsExplorer
+          title="Monthly Insights"
+          subtitle="Analyze subscriptions, spending trends, and upcoming renewals"
+          sourceSubscriptions={baseSubscriptions}
+          mode="all"
+          showSummary={false}
+          showList={false}
+          onFilteredChange={setInsightsSubscriptions}
+        />
 
-            <Text className="absolute inset-x-0 text-center text-[22px] font-sans-extrabold text-[#081126]">
-              Monthly Insights
-            </Text>
+        <View className="px-4">
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="More options"
-              onPress={() => {}}
-              className="z-10 h-12 w-12 items-center justify-center rounded-full border border-black/15 bg-transparent"
-            >
-              <Image source={icons.menu} className="h-5 w-5" resizeMode="contain" />
-            </Pressable>
-          </View>
-
-          <View className="flex-row items-center justify-between">
+          <View className="mt-4 flex-row items-center justify-between">
             <Text className="text-[26px] font-sans-extrabold text-[#081126]">Upcoming</Text>
-            <Pressable className="rounded-full border border-black/20 px-4 py-2" onPress={() => {}}>
-              <Text className="text-[16px] font-sans-semibold text-[#081126]">View all</Text>
+            <Pressable className="rounded-full border border-black/20 px-4 py-2" onPress={() => router.push("/(tabs)/renewals") }>
+              <Text className="text-[12px] font-sans-semibold text-[#081126]">View all</Text>
             </Pressable>
           </View>
 
@@ -144,8 +162,10 @@ const Insights = () => {
               </View>
 
               <View className="ml-1 flex-1">
-                <View className="relative justify-end" style={{ height: 192 }}>
-                  {tickTops.slice(0, 4).map((top) => (
+                {/* <View className="relative justify-end" style={{ height: 192 }}>
+                  {tickTops.slice(0, 4).map((top) => ( */}
+                  <View className="relative justify-end" style={{ height: chartHeight + 22 }}>
+                  {tickTops.slice(0, tickTops.length - 1).map((top) => (
                     <View
                       key={top}
                       className="absolute left-0 right-0 border-b border-dashed border-black/10"
@@ -190,33 +210,41 @@ const Insights = () => {
             <View className="flex-row items-start justify-between">
               <View>
                 <Text className="text-[21px] font-sans-extrabold text-[#081126]">Expenses</Text>
-                <Text className="mt-1 text-[15px] font-sans-medium text-[#334155]">March 2026</Text>
+                <Text className="mt-1 text-[15px] font-sans-medium text-[#334155]">{dayjs().format("MMMM YYYY")}</Text>
               </View>
 
               <View className="items-end">
                 <Text className="text-[21px] font-sans-extrabold text-[#081126]">
                   -{formatCurrency(totals.monthlyCost)}
                 </Text>
-                <Text className="mt-1 text-[15px] font-sans-semibold text-[#f27c56]">+12%</Text>
+                {typeof totals.percentageChange === "number" ? (
+                  <Text className="mt-1 text-[15px] font-sans-semibold text-[#f27c56]">
+                    {totals.percentageChange > 0 ? "+" : ""}
+                    {totals.percentageChange}%
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>
 
           <View className="mt-8 flex-row items-center justify-between">
             <Text className="text-[26px] font-sans-extrabold text-[#081126]">History</Text>
-            <Pressable className="rounded-full border border-black/20 px-4 py-2" onPress={() => {}}>
-              <Text className="text-[16px] font-sans-semibold text-[#081126]">View all</Text>
+            <Pressable
+              className="rounded-full border border-black/20 px-4 py-2"
+              onPress={() => setIsHistorySheetVisible(true)}
+            >
+              <Text className="text-[12px] font-sans-semibold text-[#081126]">View all</Text>
             </Pressable>
           </View>
 
           <View className="mt-4 gap-4">
-            {totals.historyItems.map((item, index) => {
+            {totals.historyItems.slice(0, 3).map((item, index) => {
               const cardBackground = index === 0 ? "#f6d74a" : index === 1 ? "#b9dfcf" : "#eddcae";
 
               return (
                 <View key={item.id} className="flex-row items-center rounded-3xl px-4 py-4" style={{ backgroundColor: cardBackground }}>
                   <View className="h-14 w-14 items-center justify-center rounded-2xl bg-black/10">
-                    <Image source={item.icon} className="h-8 w-8" resizeMode="contain" />
+                    <SubscriptionIcon iconName={item.icon} size={30} />
                   </View>
 
                   <View className="ml-3 flex-1">

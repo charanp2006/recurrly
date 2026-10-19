@@ -1,4 +1,5 @@
-import { icons } from "./icons";
+import { ChartColumnBig, CircleUserRound, House, Wallet } from "lucide-react-native";
+
 import type {
     AppTab,
     Subscription,
@@ -31,10 +32,10 @@ export const SUBSCRIPTION_CATEGORY_COLORS: Record<SubscriptionCategory, string> 
 };
 
 export const tabs: AppTab[] = [
-    { name: "index", title: "Home", icon: icons.home },
-    { name: "subscriptions", title: "Subscriptions", icon: icons.wallet },
-    { name: "insights", title: "Insights", icon: icons.activity },
-    { name: "settings", title: "Profile", icon: icons.setting },
+    { name: "index", title: "Home", icon: House },
+    { name: "subscriptions", title: "Subscriptions", icon: Wallet },
+    { name: "insights", title: "Insights", icon: ChartColumnBig },
+    { name: "settings", title: "Profile", icon: CircleUserRound },
 ];
 
 export const HOME_USER = {
@@ -50,7 +51,7 @@ export const UPCOMING_SUBSCRIPTIONS: UpcomingSubscription[] = [
     // Sample values modeled on common USD subscription pricing.
     {
         id: "spotify",
-        icon: icons.spotify,
+        icon: "spotify",
         name: "Spotify",
         price: 5.99,
         currency: "USD",
@@ -58,7 +59,7 @@ export const UPCOMING_SUBSCRIPTIONS: UpcomingSubscription[] = [
     },
     {
         id: "notion",
-        icon: icons.notion,
+        icon: "notion",
         name: "Notion",
         price: 12.0,
         currency: "USD",
@@ -66,7 +67,7 @@ export const UPCOMING_SUBSCRIPTIONS: UpcomingSubscription[] = [
     },
     {
         id: "figma",
-        icon: icons.figma,
+        icon: "figma",
         name: "Figma",
         price: 15.0,
         currency: "USD",
@@ -77,7 +78,7 @@ export const UPCOMING_SUBSCRIPTIONS: UpcomingSubscription[] = [
 export const HOME_SUBSCRIPTIONS: Subscription[] = [
     {
         id: "adobe-creative-cloud",
-        icon: icons.adobe,
+        icon: "adobe",
         name: "Adobe Creative Cloud",
         plan: "Teams Plan",
         category: "Design",
@@ -92,7 +93,7 @@ export const HOME_SUBSCRIPTIONS: Subscription[] = [
     },
     {
         id: "github-pro",
-        icon: icons.github,
+        icon: "github",
         name: "GitHub Pro",
         plan: "Developer",
         category: "Developer Tools",
@@ -107,7 +108,7 @@ export const HOME_SUBSCRIPTIONS: Subscription[] = [
     },
     {
         id: "claude-pro",
-        icon: icons.claude,
+        icon: "claude",
         name: "Claude Pro",
         plan: "Pro Plan",
         category: "AI Tools",
@@ -122,7 +123,7 @@ export const HOME_SUBSCRIPTIONS: Subscription[] = [
     },
     {
         id: "canva-pro",
-        icon: icons.canva,
+        icon: "canva",
         name: "Canva Pro",
         plan: "Yearly Access",
         category: "Design",

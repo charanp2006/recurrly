@@ -1,13 +1,17 @@
+/**
+ * Create Subscription Modal
+ *
+ * Purpose:
+ * - Collects structured subscription details from the user
+ * - Validates form values before API submission
+ * - Delegates creation to parent-provided callback and closes on success
+ */
 import React from "react";
 import { clsx } from "clsx";
 import dayjs from "dayjs";
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
     Pressable,
     ScrollView,
-    StyleSheet,
     Text,
     TextInput,
     View,
@@ -16,6 +20,7 @@ import {
     SUBSCRIPTION_CATEGORIES,
     SUBSCRIPTION_FREQUENCIES,
 } from "@/constants/data";
+import BottomActionSheet from "@/components/BottomActionSheet";
 
 type CreateSubscriptionModalProps = {
     visible: boolean;
@@ -34,6 +39,9 @@ const DEFAULT_FREQUENCY = SUBSCRIPTION_FREQUENCIES[0];
 const DEFAULT_CATEGORY = SUBSCRIPTION_CATEGORIES[0];
 const validPricePattern = /^\d+(?:[.,]\d{1,2})?$/;
 
+/**
+ * Renders a bottom-sheet style modal for creating a new subscription.
+ */
 const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscriptionModalProps) => {
     const [name, setName] = React.useState("");
     const [price, setPrice] = React.useState("");
@@ -65,6 +73,9 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
     const isPaymentMethodValid = normalizedPaymentMethod.length >= 2;
     const canSubmit = isNameValid && isPriceValid && isPaymentMethodValid && !isSubmitting;
 
+    /**
+     * Resets all input values and validation errors back to initial state.
+     */
     const resetForm = () => {
         setName("");
         setPrice("");
@@ -77,6 +88,9 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
         setSubmitError("");
     };
 
+    /**
+     * Validates inputs, submits the normalized payload, and closes on success.
+     */
     const handleSubmit = async () => {
         if (isSubmitting) {
             return;
@@ -128,41 +142,17 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
     };
 
     return (
-        <Modal
+        <BottomActionSheet
             visible={visible}
-            transparent
-            animationType="slide"
-            presentationStyle="overFullScreen"
-            onRequestClose={onClose}
+            onClose={onClose}
+            title="New Subscription"
         >
-            <View className="modal-overlay">
-                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === "ios" ? "padding" : undefined}
-                    className="mt-auto"
-                >
-                    <View className="modal-container">
-                        <View className="modal-header">
-                            <Text className="modal-title">New Subscription</Text>
-
-                            <Pressable
-                                onPress={onClose}
-                                accessibilityRole="button"
-                                accessibilityLabel="Close modal"
-                                hitSlop={10}
-                                className="modal-close"
-                            >
-                                <Text className="modal-close-text">×</Text>
-                            </Pressable>
-                        </View>
-
-                        <ScrollView
-                            keyboardShouldPersistTaps="handled"
-                            showsVerticalScrollIndicator={false}
-                            contentContainerClassName="modal-body"
-                        >
-                            <View className="auth-form">
+            <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerClassName="modal-body"
+            >
+                <View className="auth-form">
                                 <View className="auth-field">
                                     <Text className="auth-label">Name</Text>
                                     <TextInput
@@ -285,12 +275,9 @@ const CreateSubscriptionModal = ({ visible, onClose, onCreate }: CreateSubscript
                                 >
                                     <Text className="auth-button-text">Create subscription</Text>
                                 </Pressable>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </KeyboardAvoidingView>
-            </View>
-        </Modal>
+                </View>
+            </ScrollView>
+        </BottomActionSheet>
     );
 };
 

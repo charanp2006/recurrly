@@ -1,3 +1,10 @@
+/**
+ * Formatting Utilities
+ *
+ * Purpose:
+ * - Centralizes user-facing formatting for currency, dates, and status labels
+ * - Provides resilient fallbacks when locale or currency formatting fails
+ */
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 
@@ -10,6 +17,9 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   GBP: "\u00A3",
 };
 
+/**
+ * Formats numeric amounts as localized currency values with two decimals.
+ */
 export const formatCurrency = (value: number, currency = "INR"): string => {
   try {
     return new Intl.NumberFormat("en-IN", {
@@ -28,12 +38,18 @@ export const formatCurrency = (value: number, currency = "INR"): string => {
   }
 };
 
+/**
+ * Formats subscription date inputs into MM/DD/YYYY display values.
+ */
 export const formatSubscriptionDateTime = (value?: string): string => {
   if (!value) return "Not provided";
   const parsedDate = dayjs(value, ["YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ss.SSS[Z]", "YYYY-MM-DDTHH:mm:ss.SSSZ"], true);
   return parsedDate.isValid() ? parsedDate.format("MM/DD/YYYY") : "Not provided";
 };
 
+/**
+ * Converts lowercase status strings to title-style labels.
+ */
 export const formatStatusLabel = (value?: string): string => {
   if (!value) return "Unknown";
   return value.charAt(0).toUpperCase() + value.slice(1);
